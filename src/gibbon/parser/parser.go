@@ -5,6 +5,7 @@ import (
 	"gibbon-lang/src/gibbon/ast"
 	"gibbon-lang/src/gibbon/lexer"
 	"gibbon-lang/src/gibbon/token"
+	"strconv"
 )
 
 const (
@@ -45,6 +46,7 @@ func NewParser(l *lexer.Lexer) *Parser {
 
 	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
+	p.registerPrefix(token.INT, p.parseIntegerLiteral)
 
 	// Read the next two tokens, so the currToken and peekToken are both set
 	p.nextToken()
@@ -200,6 +202,28 @@ func (p *Parser) peekError(t token.TokenType) {
 
 func (p *Parser) parseIdentifier() ast.Expression {
 	return &ast.Identifier{Token: p.currToken, Value: p.currToken.Literal}
+}
+
+// Parses integer literals in the source code
+// This function:
+// 1. Creates an AST node for the integer literal
+// 2. Converts the string representation to an int64
+// 3. Reports an error if the conversion fails
+func (p *Parser) parseIntegerLiteral() ast.Expression {
+	// Create new AST node with current token
+	lit := &ast.IntegerLiteral{Token: p.currToken}
+
+	// Convert string to in64, using base 0 for automatic base detection
+	// This allows parsing decimal, octal and hex literals
+	val, err := strconv.ParseInt(p.currToken.Literal, 0, 64)
+	if err != nil {
+		msg := fmt.Sprintf("could not parse %q as integer", p.currToken.Literal)
+		p.errors = append(p.errors, msg)
+		return nil
+	}
+
+	lit.Value = val
+	return lit
 }
 
 func (p *Parser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
