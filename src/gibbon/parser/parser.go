@@ -5,6 +5,7 @@ import (
 	"gibbon-lang/src/gibbon/ast"
 	"gibbon-lang/src/gibbon/lexer"
 	"gibbon-lang/src/gibbon/token"
+	"strconv"
 )
 
 const (
@@ -17,6 +18,24 @@ const (
 	PREFIX
 	CALL
 )
+
+// Maps token types to their operator precedence levels.
+// Higher values indicate higher precedence in the order of operations.
+// The precedence levels are:
+//   - PRODUCT (multiplication, division)
+//   - SUM (addition, subtraction)
+//   - LESSGREATER (comparison operators <, >)
+//   - EQUALS (equality operators ==, !=)
+var precendences = map[token.TokenType]int{
+	token.EQ:       EQUALS,
+	token.NOT_EQ:   EQUALS,
+	token.LT:       LESSGREATER,
+	token.GT:       LESSGREATER,
+	token.PLUS:     SUM,
+	token.MINUS:    SUM,
+	token.SLASH:    PRODUCT,
+	token.ASTERISK: PRODUCT,
+}
 
 // Implements a recursive descent parser for the language.
 // A recursive descent parser is a top-down parser that uses a set of mutually
@@ -45,6 +64,19 @@ func NewParser(l *lexer.Lexer) *Parser {
 
 	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
+	p.registerPrefix(token.INT, p.parseIntegerLiteral)
+	p.registerPrefix(token.BANG, p.parsePrefixExpression)
+	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
+
+	p.infixParseFns = make(map[token.TokenType]infixParseFn)
+	p.registerInfix(token.PLUS, p.parseInfixExpression)
+	p.registerInfix(token.MINUS, p.parseInfixExpression)
+	p.registerInfix(token.SLASH, p.parseInfixExpression)
+	p.registerInfix(token.ASTERISK, p.parseInfixExpression)
+	p.registerInfix(token.EQ, p.parseInfixExpression)
+	p.registerInfix(token.NOT_EQ, p.parseInfixExpression)
+	p.registerInfix(token.LT, p.parseInfixExpression)
+	p.registerInfix(token.GT, p.parseInfixExpression)
 
 	// Read the next two tokens, so the currToken and peekToken are both set
 	p.nextToken()
@@ -153,14 +185,37 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 
 // The core of the Pratt parsing implementation. It uses precendence climbing to handle
 // operator precendence.
+// Parameters:
+// - precedence: the current precedence level being parsed
+// Returns: An AST expression node or nil if parsing fails
+// Examples of expressions it can parse:
+// - Simple: 5, x, true
+// - Prefix: -5, !true
+// - Infix: 5 + 3, x * y, a == b
 func (p *Parser) parseExpression(precedence int) ast.Expression {
 	// Get the prefix parsing function for current type
 	prefix := p.prefixParseFns[p.currToken.Type]
 	if prefix == nil {
+		p.noPrefixParseFnError(p.currToken.Type)
 		return nil
 	}
 	// parse the prefix expression
 	leftExp := prefix()
+
+	// Continue parsing infix expressions while:
+	// 1. The next token is'nt a semicolon
+	// 2. The next operator has higher precedence than current
+	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
+		infix := p.infixParseFns[p.peekToken.Type]
+		if infix == nil {
+			return leftExp
+		}
+
+		p.nextToken()
+
+		leftExp = infix(leftExp)
+	}
+
 	return leftExp
 }
 
@@ -200,6 +255,89 @@ func (p *Parser) peekError(t token.TokenType) {
 
 func (p *Parser) parseIdentifier() ast.Expression {
 	return &ast.Identifier{Token: p.currToken, Value: p.currToken.Literal}
+}
+
+// Parses integer literals in the source code
+// This function:
+// 1. Creates an AST node for the integer literal
+// 2. Converts the string representation to an int64
+// 3. Reports an error if the conversion fails
+func (p *Parser) parseIntegerLiteral() ast.Expression {
+	// Create new AST node with current token
+	lit := &ast.IntegerLiteral{Token: p.currToken}
+
+	// Convert string to in64, using base 0 for automatic base detection
+	// This allows parsing decimal, octal and hex literals
+	val, err := strconv.ParseInt(p.currToken.Literal, 0, 64)
+	if err != nil {
+		msg := fmt.Sprintf("could not parse %q as integer", p.currToken.Literal)
+		p.errors = append(p.errors, msg)
+		return nil
+	}
+
+	lit.Value = val
+	return lit
+}
+
+// Handles unary operator expressions
+// Grammar: prefix_expression -> prefix_operator expression
+// Examples:
+// - Negation: -5, -foo
+// - Logical NOT: !true, !isSomething
+func (p *Parser) parsePrefixExpression() ast.Expression {
+	// Create prefix expression node with current token
+	expression := &ast.PrefixExpression{
+		Token:    p.currToken,
+		Operator: p.currToken.Literal,
+	}
+	// Advance to the operand token
+	p.nextToken()
+	// Parse the operand with PREFIX precedence
+	expression.Right = p.parseExpression(PREFIX)
+
+	return expression
+}
+
+func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
+	expression := &ast.InfixExpression{
+		Token:    p.currToken,
+		Operator: p.currToken.Literal,
+		Left:     left,
+	}
+
+	precedence := p.currPrecedence()
+	p.nextToken()
+	expression.Right = p.parseExpression(precedence)
+	return expression
+}
+
+// Returns the precedence associated with token type of p.peekToken. If it
+// does'nt find a precedence for p.peekToken, it default to LOWEST, the lowest
+// possible precedence any operator can have.
+func (p *Parser) peekPrecedence() int {
+	if p, ok := precendences[p.peekToken.Type]; ok {
+		return p
+	}
+
+	return LOWEST
+}
+
+// Returns the precedence associated with token type of p.currToken. If it
+// does'nt find a precedence for p.currToken, it default to LOWEST, the lowest
+// possible precedence any operator can have.
+func (p *Parser) currPrecedence() int {
+	if p, ok := precendences[p.currToken.Type]; ok {
+		return p
+	}
+
+	return LOWEST
+}
+
+// Records an error when no prefix parse function exists
+// for a given token type.
+func (p *Parser) noPrefixParseFnError(t token.TokenType) {
+	msg := fmt.Sprintf("no prefix parse function for %s found", t)
+	p.errors = append(p.errors, msg)
 }
 
 func (p *Parser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
