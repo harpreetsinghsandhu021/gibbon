@@ -150,6 +150,9 @@ func (i *Identifier) String() string {
 	return i.Value
 }
 
+// Represents an integer literal node in the AST.
+// It consists of the token containing location and literal text information,
+// and the actual parsed int64 value.
 type IntegerLiteral struct {
 	Token token.Token
 	Value int64
@@ -158,3 +161,33 @@ type IntegerLiteral struct {
 func (il *IntegerLiteral) expressionNode()      {}
 func (il *IntegerLiteral) TokenLiteral() string { return il.Token.Literal }
 func (il *IntegerLiteral) String() string       { return il.Token.Literal }
+
+// Represents a prefix operator expression in the AST.
+// It consists of an operator token (e.g., "!", "-"), the operator as a string,
+// and the expression on which the operator acts (Right).
+// For example, in the expression "!true" or "-5":
+// - Token would store the token information
+// - Operator would be "!" or "-"
+// - Right would be the expression being operated on
+type PrefixExpression struct {
+	Token    token.Token
+	Operator string
+	Right    Expression
+}
+
+func (pe *PrefixExpression) expressionNode()      {}
+func (pe *PrefixExpression) TokenLiteral() string { return pe.Token.Literal }
+
+// Returns a string representation of the prefix expression in the format "(<operator><right_expr>)".
+// For example, if the operator is "-" and right expression is "5", it returns "(-5)".
+func (pe *PrefixExpression) String() string {
+	var out bytes.Buffer
+
+	out.WriteString("(")
+
+	out.WriteString(pe.Operator)
+	out.WriteString(pe.Right.String())
+	out.WriteString(")")
+
+	return out.String()
+}
