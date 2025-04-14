@@ -7,6 +7,17 @@ import (
 	"gibbon-lang/src/gibbon/token"
 )
 
+const (
+	_ int = iota
+	LOWEST
+	EQUALS
+	LESSGREATER
+	SUM
+	PRODUCT
+	PREFIX
+	CALL
+)
+
 // Implements a recursive descent parser for the language.
 // A recursive descent parser is a top-down parser that uses a set of mutually
 // recursive functions to process the grammar rules.
@@ -19,10 +30,21 @@ type Parser struct {
 	currToken token.Token // Current token under examination
 	peekToken token.Token // Next token in the stream(lookahead token)
 	errors    []string
+
+	prefixParseFns map[token.TokenType]prefixParseFn
+	infixParseFns  map[token.TokenType]infixParseFn
 }
+
+type (
+	prefixParseFn func() ast.Expression
+	infixParseFn  func(ast.Expression) ast.Expression
+)
 
 func NewParser(l *lexer.Lexer) *Parser {
 	p := &Parser{l: l, errors: []string{}}
+
+	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
+	p.registerPrefix(token.IDENT, p.parseIdentifier)
 
 	// Read the next two tokens, so the currToken and peekToken are both set
 	p.nextToken()
@@ -69,7 +91,7 @@ func (p *Parser) parseStatement() ast.Statement {
 	case token.RETURN:
 		return p.parseReturnStatement()
 	default:
-		return nil
+		return p.parseExpressionStatement()
 	}
 }
 
@@ -114,6 +136,34 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 	return stmt
 }
 
+// Handles expressions that appear as statements
+// Examples:
+// - function calls: someFunction();
+// - assignments: x = 5;
+func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
+	stmt := &ast.ExpressionStatement{Token: p.currToken}
+	stmt.Expression = p.parseExpression(LOWEST)
+
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+// The core of the Pratt parsing implementation. It uses precendence climbing to handle
+// operator precendence.
+func (p *Parser) parseExpression(precedence int) ast.Expression {
+	// Get the prefix parsing function for current type
+	prefix := p.prefixParseFns[p.currToken.Type]
+	if prefix == nil {
+		return nil
+	}
+	// parse the prefix expression
+	leftExp := prefix()
+	return leftExp
+}
+
 // Checks if the current token matches the expected type
 func (p *Parser) currTokenIs(t token.TokenType) bool {
 	return p.currToken.Type == t
@@ -136,11 +186,26 @@ func (p *Parser) expectPeek(t token.TokenType) bool {
 	}
 }
 
+// Returns all parsing errors encountered during parsing
+// These errors typically indicate syntax errors in the source code
 func (p *Parser) Errors() []string {
 	return p.errors
 }
 
+// Records an error when the next token does'nt match what's expected by the grammar.
 func (p *Parser) peekError(t token.TokenType) {
 	msg := fmt.Sprintf("expected next token ton be %s, got %s instead", t, p.peekToken.Type)
 	p.errors = append(p.errors, msg)
+}
+
+func (p *Parser) parseIdentifier() ast.Expression {
+	return &ast.Identifier{Token: p.currToken, Value: p.currToken.Literal}
+}
+
+func (p *Parser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
+	p.prefixParseFns[tokenType] = fn
+}
+
+func (p *Parser) registerInfix(tokenType token.TokenType, fn infixParseFn) {
+	p.infixParseFns[tokenType] = fn
 }

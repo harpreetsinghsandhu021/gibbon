@@ -1,11 +1,15 @@
 package ast
 
-import "gibbon-lang/src/gibbon/token"
+import (
+	"bytes"
+	"gibbon-lang/src/gibbon/token"
+)
 
 // Base interface for all AST nodes.
 // Every node in the AST must be able to return its literal token value
 type Node interface {
 	TokenLiteral() string
+	String() string
 }
 
 // Represents a statement node in the AST.
@@ -40,6 +44,17 @@ func (p *Program) TokenLiteral() string {
 	}
 }
 
+// Creates a buffer and writes the return value of each statements String() method to it.
+// And returns the buffer as a string.
+func (p *Program) String() string {
+	var out bytes.Buffer
+
+	for _, s := range p.Statements {
+		out.WriteString(s.String())
+	}
+	return out.String()
+}
+
 // STATEMENTS
 
 // Represents a variable declaration statement.
@@ -53,6 +68,23 @@ type LetStatement struct {
 func (ls *LetStatement) statementNode()       {}
 func (ls *LetStatement) TokenLiteral() string { return ls.Token.Literal }
 
+// Produces a string representation of the let statement
+// Format: "let <identifier> = <expression>;"
+func (ls *LetStatement) String() string {
+	var out bytes.Buffer
+
+	out.WriteString(ls.TokenLiteral() + " ") // Write "let "
+	out.WriteString(ls.Name.String())        // Write identifier
+	out.WriteString(" = ")                   // Write " = "
+
+	if ls.Value != nil {
+		out.WriteString(ls.Value.String()) // Write expression
+	}
+	out.WriteString(";")
+
+	return out.String()
+}
+
 // Represents a 'return' statement in the AST.
 // It consists of the 'return' token and an optional return value expression.
 // For example: 'return 5' or 'return x + y'
@@ -63,6 +95,43 @@ type ReturnStatement struct {
 
 func (rs *ReturnStatement) statementNode()       {}
 func (rs *ReturnStatement) TokenLiteral() string { return rs.Token.Literal }
+
+// Produces a string representation of the return statement
+// Format: "return <expression>;"
+func (rs *ReturnStatement) String() string {
+	var out bytes.Buffer
+
+	out.WriteString(rs.TokenLiteral() + " ") // Write "return"
+
+	if rs.ReturnValue != nil {
+		out.WriteString(rs.ReturnValue.String()) // Write expression if present
+	}
+
+	out.WriteString(";")
+
+	return out.String()
+}
+
+// Represents a statement that consists of a single expression.
+// It is used when an expression appears in a statement context, such as a function
+// call appearing on its own line. The Token field holds the first token of the
+// expression and Expression holds the actual expression being used as a statement.
+type ExpressionStatement struct {
+	Token      token.Token
+	Expression Expression
+}
+
+func (es *ExpressionStatement) statementNode()       {}
+func (es *ExpressionStatement) TokenLiteral() string { return es.Token.Literal }
+
+// Returns the string representation of the contained expression
+func (es *ExpressionStatement) String() string {
+	if es.Expression != nil {
+		return es.Expression.String()
+	}
+
+	return ""
+}
 
 // EXPRESSIONS
 
@@ -75,3 +144,8 @@ type Identifier struct {
 
 func (i *Identifier) expressionNode()      {}
 func (i *Identifier) TokenLiteral() string { return i.Token.Literal }
+
+// Returns the identifier's name
+func (i *Identifier) String() string {
+	return i.Value
+}
