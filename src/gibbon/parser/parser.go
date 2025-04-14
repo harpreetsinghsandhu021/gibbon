@@ -19,6 +19,24 @@ const (
 	CALL
 )
 
+// Maps token types to their operator precedence levels.
+// Higher values indicate higher precedence in the order of operations.
+// The precedence levels are:
+//   - PRODUCT (multiplication, division)
+//   - SUM (addition, subtraction)
+//   - LESSGREATER (comparison operators <, >)
+//   - EQUALS (equality operators ==, !=)
+var precendences = map[token.TokenType]int{
+	token.EQ:       EQUALS,
+	token.NOT_EQ:   EQUALS,
+	token.LT:       LESSGREATER,
+	token.GT:       LESSGREATER,
+	token.PLUS:     SUM,
+	token.MINUS:    SUM,
+	token.SLASH:    PRODUCT,
+	token.ASTERISK: PRODUCT,
+}
+
 // Implements a recursive descent parser for the language.
 // A recursive descent parser is a top-down parser that uses a set of mutually
 // recursive functions to process the grammar rules.
@@ -49,6 +67,16 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
 	p.registerPrefix(token.BANG, p.parsePrefixExpression)
 	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
+
+	p.infixParseFns = make(map[token.TokenType]infixParseFn)
+	p.registerInfix(token.PLUS, p.parseInfixExpression)
+	p.registerInfix(token.MINUS, p.parseInfixExpression)
+	p.registerInfix(token.SLASH, p.parseInfixExpression)
+	p.registerInfix(token.ASTERISK, p.parseInfixExpression)
+	p.registerInfix(token.EQ, p.parseInfixExpression)
+	p.registerInfix(token.NOT_EQ, p.parseInfixExpression)
+	p.registerInfix(token.LT, p.parseInfixExpression)
+	p.registerInfix(token.GT, p.parseInfixExpression)
 
 	// Read the next two tokens, so the currToken and peekToken are both set
 	p.nextToken()
@@ -157,6 +185,13 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 
 // The core of the Pratt parsing implementation. It uses precendence climbing to handle
 // operator precendence.
+// Parameters:
+// - precedence: the current precedence level being parsed
+// Returns: An AST expression node or nil if parsing fails
+// Examples of expressions it can parse:
+// - Simple: 5, x, true
+// - Prefix: -5, !true
+// - Infix: 5 + 3, x * y, a == b
 func (p *Parser) parseExpression(precedence int) ast.Expression {
 	// Get the prefix parsing function for current type
 	prefix := p.prefixParseFns[p.currToken.Type]
@@ -166,6 +201,21 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	}
 	// parse the prefix expression
 	leftExp := prefix()
+
+	// Continue parsing infix expressions while:
+	// 1. The next token is'nt a semicolon
+	// 2. The next operator has higher precedence than current
+	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
+		infix := p.infixParseFns[p.peekToken.Type]
+		if infix == nil {
+			return leftExp
+		}
+
+		p.nextToken()
+
+		leftExp = infix(leftExp)
+	}
+
 	return leftExp
 }
 
@@ -246,6 +296,41 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 	expression.Right = p.parseExpression(PREFIX)
 
 	return expression
+}
+
+func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
+	expression := &ast.InfixExpression{
+		Token:    p.currToken,
+		Operator: p.currToken.Literal,
+		Left:     left,
+	}
+
+	precedence := p.currPrecedence()
+	p.nextToken()
+	expression.Right = p.parseExpression(precedence)
+	return expression
+}
+
+// Returns the precedence associated with token type of p.peekToken. If it
+// does'nt find a precedence for p.peekToken, it default to LOWEST, the lowest
+// possible precedence any operator can have.
+func (p *Parser) peekPrecedence() int {
+	if p, ok := precendences[p.peekToken.Type]; ok {
+		return p
+	}
+
+	return LOWEST
+}
+
+// Returns the precedence associated with token type of p.currToken. If it
+// does'nt find a precedence for p.currToken, it default to LOWEST, the lowest
+// possible precedence any operator can have.
+func (p *Parser) currPrecedence() int {
+	if p, ok := precendences[p.currToken.Type]; ok {
+		return p
+	}
+
+	return LOWEST
 }
 
 // Records an error when no prefix parse function exists
