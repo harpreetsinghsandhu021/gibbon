@@ -66,6 +66,8 @@ func (p *Parser) parseStatement() ast.Statement {
 	switch p.currToken.Type {
 	case token.LET:
 		return p.parseLetStatement()
+	case token.RETURN:
+		return p.parseReturnStatement()
 	default:
 		return nil
 	}
@@ -74,7 +76,7 @@ func (p *Parser) parseStatement() ast.Statement {
 // Parses let statements according to this grammar rule:
 // let_statement -> 'let' identifier '=' expression ';'
 // This is a recursive descent parsing function that:
-// 1. Verifies rhe sequence of tokens matches the expected pattern
+// 1. Verifies the sequence of tokens matches the expected pattern
 // 2. Constructs an AST node representing the let statement.
 func (p *Parser) parseLetStatement() *ast.LetStatement {
 	stmt := &ast.LetStatement{Token: p.currToken}
@@ -93,6 +95,18 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 	}
 
 	// Skip expression=s until we encounter a semicolon
+	for !p.currTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
+	stmt := &ast.ReturnStatement{Token: p.currToken}
+
+	p.nextToken()
+
 	for !p.currTokenIs(token.SEMICOLON) {
 		p.nextToken()
 	}

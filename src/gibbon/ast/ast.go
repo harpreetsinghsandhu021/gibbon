@@ -53,6 +53,17 @@ type LetStatement struct {
 func (ls *LetStatement) statementNode()       {}
 func (ls *LetStatement) TokenLiteral() string { return ls.Token.Literal }
 
+// Represents a 'return' statement in the AST.
+// It consists of the 'return' token and an optional return value expression.
+// For example: 'return 5' or 'return x + y'
+type ReturnStatement struct {
+	Token       token.Token
+	ReturnValue Expression
+}
+
+func (rs *ReturnStatement) statementNode()       {}
+func (rs *ReturnStatement) TokenLiteral() string { return rs.Token.Literal }
+
 // EXPRESSIONS
 
 // Represents a named entity in the program.
