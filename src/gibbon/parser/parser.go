@@ -69,6 +69,7 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
 	p.registerPrefix(token.TRUE, p.parseBoolean)
 	p.registerPrefix(token.FALSE, p.parseBoolean)
+	p.registerPrefix(token.LPAREN, p.parsedGroupedExpression)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
@@ -315,6 +316,30 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 
 func (p *Parser) parseBoolean() ast.Expression {
 	return &ast.Boolean{Token: p.currToken, Value: p.currTokenIs(token.TRUE)}
+}
+
+// Handles parsing of parenthesized expressions
+// Grammar: grouped_expression -> '(' expression ')'
+// This allows for explicit precedence control in expressions.
+// Examples:
+// - Simple grouping: (5 + 3)
+// - Nested grouping: ((5 + 3) * 2)
+// - Mixed operators: (a + b) * (c + d)
+func (p *Parser) parsedGroupedExpression() ast.Expression {
+	// Move past the opening parenthesis
+	p.nextToken()
+
+	// Parse the expression inside the parenthesis
+	// Using LOWEST precedence to allow any expression type
+	exp := p.parseExpression(LOWEST)
+
+	// Ensure the next token is a closing parenthesis
+	// Return nil if there's a syntax error (missing closing parenthesis)
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return exp
 }
 
 // Returns the precedence associated with token type of p.peekToken. If it
