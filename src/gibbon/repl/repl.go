@@ -3,6 +3,7 @@ package repl
 import (
 	"bufio"
 	"fmt"
+	"gibbon-lang/src/gibbon/evaluator"
 	"gibbon-lang/src/gibbon/lexer"
 	"gibbon-lang/src/gibbon/parser"
 	"io"
@@ -77,8 +78,13 @@ func Start(in io.Reader, out io.Writer) {
 			continue
 		}
 
-		io.WriteString(out, program.String())
-		io.WriteString(out, "\n")
+		evaluated := evaluator.Eval(program)
+
+		if evaluated != nil {
+			io.WriteString(out, evaluated.Inspect())
+			io.WriteString(out, "\n")
+		}
+
 	}
 }
 
