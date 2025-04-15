@@ -35,6 +35,7 @@ var precendences = map[token.TokenType]int{
 	token.MINUS:    SUM,
 	token.SLASH:    PRODUCT,
 	token.ASTERISK: PRODUCT,
+	token.LPAREN:   CALL,
 }
 
 // Implements a recursive descent parser for the language.
@@ -82,6 +83,7 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.NOT_EQ, p.parseInfixExpression)
 	p.registerInfix(token.LT, p.parseInfixExpression)
 	p.registerInfix(token.GT, p.parseInfixExpression)
+	p.registerInfix(token.LPAREN, p.parseCallExpression)
 
 	// Read the next two tokens, so the currToken and peekToken are both set
 	p.nextToken()
@@ -318,6 +320,57 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 
 func (p *Parser) parseBoolean() ast.Expression {
 	return &ast.Boolean{Token: p.currToken, Value: p.currTokenIs(token.TRUE)}
+}
+
+// Handles parsing of function calls.
+// Grammar: call_expression -> expression '(' argument_list? ')'
+// The expression can be an identifier or a function literal.
+// Examples:
+// - Simple call: add(1, 2)
+// - Nested calls: add(subtract(5, 3), multiply(2, 4))
+// - Function literal call: fn(x,y){x+y}(1,2)
+func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
+	// Create new call expression node with current '(' token the function being called
+	exp := &ast.CallExpression{Token: p.currToken, Function: function}
+	// Parse the argument list b/w the parenthesis
+	exp.Arguments = p.parseCallArguments()
+	return exp
+}
+
+// Handles parsing of function call arguments
+// Grammar: argument_list -> expression (',' expression)*
+// Parameters are evaluated left to right.
+// Examples:
+// - No arguments: foo()
+// - Single argument: foo(5)
+// - Multiple arguments: foo(1, x + y, bar())
+// - Nested expressions: foo(1 + 2, bar(3))
+func (p *Parser) parseCallArguments() []ast.Expression {
+	args := []ast.Expression{}
+
+	// Handle empty argument list: foo()
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return args
+	}
+
+	// Parse the first argument
+	p.nextToken()
+	args = append(args, p.parseExpression(LOWEST))
+
+	// Parse additional arguments: foo(1, 2, 3)
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken() // consume the comma
+		p.nextToken() // move to the next argument
+		args = append(args, p.parseExpression(LOWEST))
+	}
+
+	// Expect and consume closing parenthesis
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return args
 }
 
 // Handles parsing of parenthesized expressions
