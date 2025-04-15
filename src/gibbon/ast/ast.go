@@ -192,6 +192,12 @@ func (pe *PrefixExpression) String() string {
 	return out.String()
 }
 
+// Represents a binary operator expression with a left and right operand.
+// For example: a + b, x * y, etc.
+// The Token field contains the first token of the expression.
+// Left holds the expression on the left side of the operator.
+// Operator is the string value of the operator (e.g., "+", "-", "*", "/").
+// Right holds the expression on the right side of the operator.
 type InfixExpression struct {
 	Token    token.Token
 	Left     Expression
@@ -212,3 +218,14 @@ func (ie *InfixExpression) String() string {
 
 	return out.String()
 }
+
+// Represents a boolean literal in the AST.
+// It holds both the token information and the actual boolean value.
+type Boolean struct {
+	Token token.Token
+	Value bool
+}
+
+func (b *Boolean) expressionNode()      {}
+func (b *Boolean) TokenLiteral() string { return b.Token.Literal }
+func (b *Boolean) String() string       { return b.Token.Literal }
