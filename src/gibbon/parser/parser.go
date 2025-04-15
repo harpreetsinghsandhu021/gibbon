@@ -70,6 +70,7 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.TRUE, p.parseBoolean)
 	p.registerPrefix(token.FALSE, p.parseBoolean)
 	p.registerPrefix(token.LPAREN, p.parsedGroupedExpression)
+	p.registerPrefix(token.IF, p.parseIfExpression)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
@@ -340,6 +341,75 @@ func (p *Parser) parsedGroupedExpression() ast.Expression {
 	}
 
 	return exp
+}
+
+// Handles parsing of conditional expressions
+// Grammar: if_expression -> 'If' '(' expression ')' block_statement ('else' block_statement)?
+// This implements conditionl branching in the language.
+// / Examples:
+// - Simple if: if (x > 5) { return true; }
+// - If with else: if (x > 5) { return true; } else { return false; }
+func (p *Parser) parseIfExpression() ast.Expression {
+	// Create new if expression mode with current 'if' token
+	expression := &ast.IfExpression{Token: p.currToken}
+
+	// Expect and consume opening parenthesis for condition
+	if !p.expectPeek(token.LPAREN) {
+		return nil
+	}
+
+	// Move past the opening parenthesis and parse the condition
+	p.nextToken()
+	expression.Condition = p.parseExpression(LOWEST)
+
+	// Expect and consume closing parenthesis
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	// Expect and consume opening brace for consequence block
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+
+	// Parse the consequence (true branch) block
+	expression.Consequence = p.parseBlockStatement()
+
+	// Check if there is an else block along and consume it the same way as if block
+	if p.peekTokenIs(token.ELSE) {
+		p.nextToken()
+
+		if !p.expectPeek(token.LBRACE) {
+			return nil
+		}
+
+		expression.Alternative = p.parseBlockStatement()
+	}
+
+	return expression
+}
+
+// Handles parsing of block statements (code blocks)
+// Grammar: block_statement -> '{' statement* '}'
+// A block statement is a sequence of statements enclosed in curly braces used in:
+// - Function bodies
+// - If/else branches
+// - Loop bodies
+func (p *Parser) parseBlockStatement() *ast.BlockStatement {
+	block := &ast.BlockStatement{Token: p.currToken}
+	block.Statements = []ast.Statement{}
+
+	p.nextToken()
+
+	for !p.currTokenIs(token.RBRACE) && !p.currTokenIs(token.EOF) {
+		stmt := p.parseStatement()
+		if stmt != nil {
+			block.Statements = append(block.Statements, stmt)
+		}
+		p.nextToken()
+	}
+
+	return block
 }
 
 // Returns the precedence associated with token type of p.peekToken. If it
