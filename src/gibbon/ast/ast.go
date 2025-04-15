@@ -3,6 +3,7 @@ package ast
 import (
 	"bytes"
 	"gibbon-lang/src/gibbon/token"
+	"strings"
 )
 
 // Base interface for all AST nodes.
@@ -230,6 +231,11 @@ func (b *Boolean) expressionNode()      {}
 func (b *Boolean) TokenLiteral() string { return b.Token.Literal }
 func (b *Boolean) String() string       { return b.Token.Literal }
 
+// Represents an if expression node in the AST.
+// It consists of a condition expression that evaluates to a boolean value,
+// a consequence block that executes if the condition is true,
+// and an optional alternative block that executes if the condition is false.
+// The Token field stores the lexical token for the 'if' keyword.
 type IfExpression struct {
 	Token       token.Token // The 'if' token
 	Condition   Expression
@@ -255,6 +261,9 @@ func (ie *IfExpression) String() string {
 	return out.String()
 }
 
+// Represents a block of statements enclosed in curly braces.
+// It consists of a '{' token and a slice of statements that are executed
+// sequentially within the block scope.
 type BlockStatement struct {
 	Token      token.Token // The '{' token
 	Statements []Statement
@@ -268,6 +277,36 @@ func (bs *BlockStatement) String() string {
 	for _, s := range bs.Statements {
 		out.WriteString(s.String())
 	}
+
+	return out.String()
+}
+
+// Represents a function expression in the source code.
+// It consists of:
+// - Token: The 'fn' token that starts the function literal
+// - Parameters: A slice of identifiers representing the function parameters
+// - Body: A block statement containing the function's implementation
+type FunctionLiteral struct {
+	Token      token.Token // The 'fn' token
+	Parameters []*Identifier
+	Body       *BlockStatement
+}
+
+func (fl *FunctionLiteral) expressionNode()      {}
+func (fl *FunctionLiteral) TokenLiteral() string { return fl.Token.Literal }
+func (fl *FunctionLiteral) String() string {
+	var out bytes.Buffer
+
+	params := []string{}
+	for _, p := range fl.Parameters {
+		params = append(params, p.String())
+	}
+
+	out.WriteString(fl.TokenLiteral())
+	out.WriteString("(")
+	out.WriteString(strings.Join(params, ", "))
+	out.WriteString(") ")
+	out.WriteString(fl.Body.String())
 
 	return out.String()
 }

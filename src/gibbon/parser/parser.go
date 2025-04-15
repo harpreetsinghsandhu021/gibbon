@@ -71,6 +71,7 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.FALSE, p.parseBoolean)
 	p.registerPrefix(token.LPAREN, p.parsedGroupedExpression)
 	p.registerPrefix(token.IF, p.parseIfExpression)
+	p.registerPrefix(token.FUNCTION, p.parseFunctionLiteral)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
@@ -387,6 +388,73 @@ func (p *Parser) parseIfExpression() ast.Expression {
 	}
 
 	return expression
+}
+
+// Handles parsing of function expressions
+// Grammar: fn_literal -> 'fn' '(' parameter_list? ')' block_statement
+// This implements function definitions in the language
+// Examples:
+// - Empty function: fn() { }
+// - Single parameter: fn(x) { return x; }
+// - Multiple parameters: fn(x, y) { return x + y; }
+func (p *Parser) parseFunctionLiteral() ast.Expression {
+	// Create new function literal node with current 'fn' token
+	lit := &ast.FunctionLiteral{Token: p.currToken}
+
+	// Expect and consume opening parenthesis for parameters
+	if !p.expectPeek(token.LPAREN) {
+		return nil
+	}
+
+	// Parse function parameters
+	lit.Parameters = p.parseFunctionParameters()
+
+	// Expect and consume opening brace for function body
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+
+	// Parse the function body as a block statement
+	lit.Body = p.parseBlockStatement()
+
+	return lit
+}
+
+// Handles parsing of function parameter lists
+// Grammar: parameter_list -> IDENT (',', IDENT)*
+// Examples:
+// - fn(): []
+// - fn(x): [x]
+// - fn(x, y, z): [x, y, z]
+func (p *Parser) parseFunctionParameters() []*ast.Identifier {
+	identifiers := []*ast.Identifier{}
+
+	// Handle empty parameter list: fn()
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return identifiers
+	}
+
+	// Parse firddt parameter
+	p.nextToken()
+
+	ident := &ast.Identifier{Token: p.currToken, Value: p.currToken.Literal}
+	identifiers = append(identifiers, ident)
+
+	// Parse additional parameters: fn(x, y, z)
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken() // consume the comma
+		p.nextToken() // move to the next identifier
+		ident := &ast.Identifier{Token: p.currToken, Value: p.currToken.Literal}
+		identifiers = append(identifiers, ident)
+	}
+
+	// Expect and consume closing parenthesis
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return identifiers
 }
 
 // Handles parsing of block statements (code blocks)
