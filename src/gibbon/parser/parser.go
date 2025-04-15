@@ -35,6 +35,7 @@ var precendences = map[token.TokenType]int{
 	token.MINUS:    SUM,
 	token.SLASH:    PRODUCT,
 	token.ASTERISK: PRODUCT,
+	token.LPAREN:   CALL,
 }
 
 // Implements a recursive descent parser for the language.
@@ -67,6 +68,11 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
 	p.registerPrefix(token.BANG, p.parsePrefixExpression)
 	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
+	p.registerPrefix(token.TRUE, p.parseBoolean)
+	p.registerPrefix(token.FALSE, p.parseBoolean)
+	p.registerPrefix(token.LPAREN, p.parsedGroupedExpression)
+	p.registerPrefix(token.IF, p.parseIfExpression)
+	p.registerPrefix(token.FUNCTION, p.parseFunctionLiteral)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
@@ -77,6 +83,7 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.NOT_EQ, p.parseInfixExpression)
 	p.registerInfix(token.LT, p.parseInfixExpression)
 	p.registerInfix(token.GT, p.parseInfixExpression)
+	p.registerInfix(token.LPAREN, p.parseCallExpression)
 
 	// Read the next two tokens, so the currToken and peekToken are both set
 	p.nextToken()
@@ -309,6 +316,221 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	p.nextToken()
 	expression.Right = p.parseExpression(precedence)
 	return expression
+}
+
+func (p *Parser) parseBoolean() ast.Expression {
+	return &ast.Boolean{Token: p.currToken, Value: p.currTokenIs(token.TRUE)}
+}
+
+// Handles parsing of function calls.
+// Grammar: call_expression -> expression '(' argument_list? ')'
+// The expression can be an identifier or a function literal.
+// Examples:
+// - Simple call: add(1, 2)
+// - Nested calls: add(subtract(5, 3), multiply(2, 4))
+// - Function literal call: fn(x,y){x+y}(1,2)
+func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
+	// Create new call expression node with current '(' token the function being called
+	exp := &ast.CallExpression{Token: p.currToken, Function: function}
+	// Parse the argument list b/w the parenthesis
+	exp.Arguments = p.parseCallArguments()
+	return exp
+}
+
+// Handles parsing of function call arguments
+// Grammar: argument_list -> expression (',' expression)*
+// Parameters are evaluated left to right.
+// Examples:
+// - No arguments: foo()
+// - Single argument: foo(5)
+// - Multiple arguments: foo(1, x + y, bar())
+// - Nested expressions: foo(1 + 2, bar(3))
+func (p *Parser) parseCallArguments() []ast.Expression {
+	args := []ast.Expression{}
+
+	// Handle empty argument list: foo()
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return args
+	}
+
+	// Parse the first argument
+	p.nextToken()
+	args = append(args, p.parseExpression(LOWEST))
+
+	// Parse additional arguments: foo(1, 2, 3)
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken() // consume the comma
+		p.nextToken() // move to the next argument
+		args = append(args, p.parseExpression(LOWEST))
+	}
+
+	// Expect and consume closing parenthesis
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return args
+}
+
+// Handles parsing of parenthesized expressions
+// Grammar: grouped_expression -> '(' expression ')'
+// This allows for explicit precedence control in expressions.
+// Examples:
+// - Simple grouping: (5 + 3)
+// - Nested grouping: ((5 + 3) * 2)
+// - Mixed operators: (a + b) * (c + d)
+func (p *Parser) parsedGroupedExpression() ast.Expression {
+	// Move past the opening parenthesis
+	p.nextToken()
+
+	// Parse the expression inside the parenthesis
+	// Using LOWEST precedence to allow any expression type
+	exp := p.parseExpression(LOWEST)
+
+	// Ensure the next token is a closing parenthesis
+	// Return nil if there's a syntax error (missing closing parenthesis)
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return exp
+}
+
+// Handles parsing of conditional expressions
+// Grammar: if_expression -> 'If' '(' expression ')' block_statement ('else' block_statement)?
+// This implements conditionl branching in the language.
+// / Examples:
+// - Simple if: if (x > 5) { return true; }
+// - If with else: if (x > 5) { return true; } else { return false; }
+func (p *Parser) parseIfExpression() ast.Expression {
+	// Create new if expression mode with current 'if' token
+	expression := &ast.IfExpression{Token: p.currToken}
+
+	// Expect and consume opening parenthesis for condition
+	if !p.expectPeek(token.LPAREN) {
+		return nil
+	}
+
+	// Move past the opening parenthesis and parse the condition
+	p.nextToken()
+	expression.Condition = p.parseExpression(LOWEST)
+
+	// Expect and consume closing parenthesis
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	// Expect and consume opening brace for consequence block
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+
+	// Parse the consequence (true branch) block
+	expression.Consequence = p.parseBlockStatement()
+
+	// Check if there is an else block along and consume it the same way as if block
+	if p.peekTokenIs(token.ELSE) {
+		p.nextToken()
+
+		if !p.expectPeek(token.LBRACE) {
+			return nil
+		}
+
+		expression.Alternative = p.parseBlockStatement()
+	}
+
+	return expression
+}
+
+// Handles parsing of function expressions
+// Grammar: fn_literal -> 'fn' '(' parameter_list? ')' block_statement
+// This implements function definitions in the language
+// Examples:
+// - Empty function: fn() { }
+// - Single parameter: fn(x) { return x; }
+// - Multiple parameters: fn(x, y) { return x + y; }
+func (p *Parser) parseFunctionLiteral() ast.Expression {
+	// Create new function literal node with current 'fn' token
+	lit := &ast.FunctionLiteral{Token: p.currToken}
+
+	// Expect and consume opening parenthesis for parameters
+	if !p.expectPeek(token.LPAREN) {
+		return nil
+	}
+
+	// Parse function parameters
+	lit.Parameters = p.parseFunctionParameters()
+
+	// Expect and consume opening brace for function body
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+
+	// Parse the function body as a block statement
+	lit.Body = p.parseBlockStatement()
+
+	return lit
+}
+
+// Handles parsing of function parameter lists
+// Grammar: parameter_list -> IDENT (',', IDENT)*
+// Examples:
+// - fn(): []
+// - fn(x): [x]
+// - fn(x, y, z): [x, y, z]
+func (p *Parser) parseFunctionParameters() []*ast.Identifier {
+	identifiers := []*ast.Identifier{}
+
+	// Handle empty parameter list: fn()
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return identifiers
+	}
+
+	// Parse firddt parameter
+	p.nextToken()
+
+	ident := &ast.Identifier{Token: p.currToken, Value: p.currToken.Literal}
+	identifiers = append(identifiers, ident)
+
+	// Parse additional parameters: fn(x, y, z)
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken() // consume the comma
+		p.nextToken() // move to the next identifier
+		ident := &ast.Identifier{Token: p.currToken, Value: p.currToken.Literal}
+		identifiers = append(identifiers, ident)
+	}
+
+	// Expect and consume closing parenthesis
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return identifiers
+}
+
+// Handles parsing of block statements (code blocks)
+// Grammar: block_statement -> '{' statement* '}'
+// A block statement is a sequence of statements enclosed in curly braces used in:
+// - Function bodies
+// - If/else branches
+// - Loop bodies
+func (p *Parser) parseBlockStatement() *ast.BlockStatement {
+	block := &ast.BlockStatement{Token: p.currToken}
+	block.Statements = []ast.Statement{}
+
+	p.nextToken()
+
+	for !p.currTokenIs(token.RBRACE) && !p.currTokenIs(token.EOF) {
+		stmt := p.parseStatement()
+		if stmt != nil {
+			block.Statements = append(block.Statements, stmt)
+		}
+		p.nextToken()
+	}
+
+	return block
 }
 
 // Returns the precedence associated with token type of p.peekToken. If it
