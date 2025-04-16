@@ -5,6 +5,11 @@ import (
 	"gibbon-lang/src/gibbon/object"
 )
 
+// Package level boolean/null singletons for performance optimization
+var TRUE = &object.Boolean{Value: true}
+var FALSE = &object.Boolean{Value: false}
+var NULL = &object.Null{}
+
 // Main entry point for the evaluator
 // It recursively walks the AST and evaluates each node to produce a value
 // Parameters:
@@ -20,8 +25,17 @@ func Eval(node ast.Node) object.Object {
 		return evalStatements(node.Statements)
 	case *ast.ExpressionStatement:
 		return Eval(node.Expression)
+	case *ast.Boolean:
+		return nativeBoolToBooleanObject(node.Value)
 	case *ast.IntegerLiteral:
 		return &object.Integer{Value: node.Value}
+	case *ast.PrefixExpression:
+		right := Eval(node.Right)
+		return evalPrefixExpression(node.Operator, right)
+	case *ast.InfixExpression:
+		left := Eval(node.Left)
+		right := Eval(node.Right)
+		return evalInfixExpression(node.Operator, left, right)
 	}
 
 	return nil
@@ -43,4 +57,107 @@ func evalStatements(stmts []ast.Statement) object.Object {
 		result = Eval(statement)
 	}
 	return result
+}
+
+// Converts Go's native boolean values to Gibbon boolean objects
+// This function implements the singleton pattern for boolean values, which:
+// 1. Reduces memory allocation by reusing the same true/false objects
+// 2. Enables pointer comparison instead instead of value comparison
+// 3. Improves garbage collection performance
+// Performance benefits:
+// - Memory: Only two boolean objects are ever created
+// - CPU: Pointer comparison is faster than value comparison
+// - GC: Less pressure on garbage collector due to object reuse
+func nativeBoolToBooleanObject(input bool) *object.Boolean {
+	if input {
+		return TRUE
+	}
+
+	return FALSE
+}
+
+// Evaluates unary operator expressions
+// Currently supports:
+// - Logical NOT (!): Inverts boolean values
+// - Negation (-): Negates numeric values
+// Examples:
+// - !true -> FALSE
+// - !false -> TRUE
+// - !null -> TRUE
+// - -5 -> Integer{-5} (TODO)
+func evalPrefixExpression(operator string, right object.Object) object.Object {
+	switch operator {
+	case "!":
+		return evalBangOperatorExpression(right)
+	case "-":
+		return evalMinusPrefixOperatorExpression(right)
+	default:
+		return NULL
+	}
+}
+
+// Implements logical NOT (!) operator. This implements Javascript-style truthiness where:
+// - true -> false
+// - false -> true
+// - null -> true
+// - everything else -> false
+func evalBangOperatorExpression(right object.Object) object.Object {
+	switch right {
+	case TRUE:
+		return FALSE
+	case FALSE:
+		return TRUE
+	case NULL:
+		return TRUE
+	default:
+		return FALSE
+	}
+}
+
+func evalMinusPrefixOperatorExpression(right object.Object) object.Object {
+	if right.Type() != object.INTEGER_OBJ {
+		return NULL
+	}
+
+	value := right.(*object.Integer).Value
+	return &object.Integer{Value: -value}
+}
+
+func evalInfixExpression(operator string, left, right object.Object) object.Object {
+	switch {
+	case left.Type() == object.INTEGER_OBJ && right.Type() == object.INTEGER_OBJ:
+		return evalIntegerInfixExpression(operator, left, right)
+	case operator == "==":
+		return nativeBoolToBooleanObject(left == right)
+	case operator == "!=":
+		return nativeBoolToBooleanObject(left != right)
+	default:
+		return NULL
+	}
+}
+
+func evalIntegerInfixExpression(operator string, left, right object.Object) object.Object {
+	leftVal := left.(*object.Integer).Value
+	rightVal := right.(*object.Integer).Value
+
+	switch operator {
+	case "+":
+		return &object.Integer{Value: leftVal + rightVal}
+	case "-":
+		return &object.Integer{Value: leftVal - rightVal}
+	case "*":
+		return &object.Integer{Value: leftVal * rightVal}
+	case "/":
+		return &object.Integer{Value: leftVal / rightVal}
+	case "<":
+		return nativeBoolToBooleanObject(leftVal < rightVal)
+	case ">":
+		return nativeBoolToBooleanObject(leftVal > rightVal)
+	case "==":
+		return nativeBoolToBooleanObject(leftVal == rightVal)
+	case "!=":
+		return nativeBoolToBooleanObject(leftVal != rightVal)
+	default:
+		return NULL
+	}
 }
