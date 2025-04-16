@@ -12,8 +12,9 @@ const (
 	EOF     = "EOF"     // End of file, which tells the parser to stop
 
 	// Identifiers + literals
-	IDENT = "IDENT"
-	INT   = "INT"
+	IDENT  = "IDENT"
+	INT    = "INT"
+	STRING = "STRING"
 
 	// Operators
 	ASSIGN   = "="
