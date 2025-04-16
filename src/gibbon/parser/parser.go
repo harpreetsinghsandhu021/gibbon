@@ -74,6 +74,7 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.IF, p.parseIfExpression)
 	p.registerPrefix(token.FUNCTION, p.parseFunctionLiteral)
 	p.registerPrefix(token.STRING, p.parseStringLiteral)
+	p.registerPrefix(token.LBRACKET, p.parseArrayLiteral)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
@@ -340,7 +341,7 @@ func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
 	// Create new call expression node with current '(' token the function being called
 	exp := &ast.CallExpression{Token: p.currToken, Function: function}
 	// Parse the argument list b/w the parenthesis
-	exp.Arguments = p.parseCallArguments()
+	exp.Arguments = p.parseExpressionList(token.RPAREN)
 	return exp
 }
 
@@ -482,6 +483,64 @@ func (p *Parser) parseFunctionLiteral() ast.Expression {
 
 func (p *Parser) parseStringLiteral() ast.Expression {
 	return &ast.StringLiteral{Token: p.currToken, Value: p.currToken.Literal}
+}
+
+// Handles parsing of array literal expression
+// This implements array construction in the language
+// Examples:
+// - Empty array: []
+// - Simple values: [1, 2, 3]
+// - Mixed expressions: [1 + 2, foo(), x * y]
+// - Nested arrays: [[], [1, 2], [3]]
+// Key features:
+// - Elements can be any valid expression
+// - Supports comma-separated list of expressions
+// - Handles nested array literals
+func (p *Parser) parseArrayLiteral() ast.Expression {
+	array := &ast.ArrayLiteral{Token: p.currToken}
+
+	array.Elements = p.parseExpressionList(token.RBRACKET)
+
+	return array
+}
+
+// Handles parsing of comma-seperated expression lists
+// Parameters:
+// - end: The token type that terminates the list (e.g "]" for arrays)
+// Returns:
+// - Slice of parsed expressions
+// - nil if parsing fails (missing terminator)
+// Parsing process:
+// 1. Handle empty list case
+// 2. Parse first expression
+// 3. Parse addtional comma-seperated expressions
+// 4. Validate proper termination
+func (p *Parser) parseExpressionList(end token.TokenType) []ast.Expression {
+	list := []ast.Expression{}
+
+	// Handle empty list case
+	if p.peekTokenIs(end) {
+		p.nextToken()
+		return list
+	}
+
+	// Parse first expression
+	p.nextToken()
+	list = append(list, p.parseExpression(LOWEST))
+
+	// Parse additional expressions after commas
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken() // consume comma
+		p.nextToken() // move to next expression
+		list = append(list, p.parseExpression(LOWEST))
+	}
+
+	// Ensure proper termination
+	if !p.expectPeek(end) {
+		return nil
+	}
+
+	return list
 }
 
 // Handles parsing of function parameter lists
