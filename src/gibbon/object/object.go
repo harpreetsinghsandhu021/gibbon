@@ -9,6 +9,8 @@ import (
 
 type ObjectType string
 
+type BuiltinFunction func(args ...Object) Object
+
 const INTEGER_OBJ = "INTEGER"
 const BOOLEAN_OBJ = "BOOLEAN"
 const NULL_OBJ = "NULL"
@@ -16,6 +18,7 @@ const RETURN_VALUE_OBJ = "RETURN_VALUE"
 const ERROR_OBJ = "ERROR"
 const FUNCTION_OBJ = "FUNCTION"
 const STRING_OBJ = "STRING"
+const BUILTIN_OBJ = "BUILTIN"
 
 type Object interface {
 	Type() ObjectType
@@ -53,7 +56,7 @@ type Error struct {
 }
 
 func (e *Error) Type() ObjectType { return ERROR_OBJ }
-func (e *Error) Inspect() string  { return "ERRROR: " + e.Message }
+func (e *Error) Inspect() string  { return "ERROR: " + e.Message }
 
 type Function struct {
 	Parameters []*ast.Identifier
@@ -87,3 +90,10 @@ type String struct {
 
 func (s *String) Type() ObjectType { return STRING_OBJ }
 func (s *String) Inspect() string  { return s.Value }
+
+type Builtin struct {
+	Fn BuiltinFunction
+}
+
+func (b *Builtin) Type() ObjectType { return BUILTIN_OBJ }
+func (b *Builtin) Inspect() string  { return "builtin function" }

@@ -329,10 +329,15 @@ func evalBlockStatement(block *ast.BlockStatement, env *object.Enviroment) objec
 // Returns the bound value if found, error if identifier is not defined
 func evalIdentifier(node *ast.Identifier, env *object.Enviroment) object.Object {
 	val, ok := env.Get(node.Value)
-	if !ok {
-		return newError("identifier not found: " + node.Value)
+	if ok {
+		return val
 	}
-	return val
+
+	if builtin, ok := builtins[node.Value]; ok {
+		return builtin
+	}
+
+	return newError("identifier not found: " + node.Value)
 }
 
 // Evaluates a list of expressions
@@ -360,18 +365,17 @@ func evalExpressions(exps []ast.Expression, env *object.Enviroment) []object.Obj
 // - The result of evaluating the function body
 // - Error if fn is not a callable object
 func applyFunction(fn object.Object, args []object.Object) object.Object {
-	// Type check - ensure we have a callable function
-	function, ok := fn.(*object.Function)
-	if !ok {
+	switch fn := fn.(type) {
+	case *object.Function:
+		extendedEnv := extendFunctionEnv(fn, args)
+		evaluated := Eval(fn.Body, extendedEnv)
+		return unwrapReturnValue(evaluated)
+	case *object.Builtin:
+		return fn.Fn(args...)
+
+	default:
 		return newError("not a function: %s", fn.Type())
 	}
-
-	// Create new scope and evaluate function bodt
-	extendedEnv := extendFunctionEnv(function, args)
-	evaluated := Eval(function.Body, extendedEnv)
-
-	// Handle return values
-	return unwrapReturnValue(evaluated)
 }
 
 // Creates a new enclosed enviroment for function execution
