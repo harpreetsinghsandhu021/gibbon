@@ -17,6 +17,7 @@ const (
 	PRODUCT
 	PREFIX
 	CALL
+	INDEX
 )
 
 // Maps token types to their operator precedence levels.
@@ -36,6 +37,7 @@ var precendences = map[token.TokenType]int{
 	token.SLASH:    PRODUCT,
 	token.ASTERISK: PRODUCT,
 	token.LPAREN:   CALL,
+	token.LBRACKET: INDEX,
 }
 
 // Implements a recursive descent parser for the language.
@@ -86,6 +88,7 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.LT, p.parseInfixExpression)
 	p.registerInfix(token.GT, p.parseInfixExpression)
 	p.registerInfix(token.LPAREN, p.parseCallExpression)
+	p.registerInfix(token.LBRACKET, p.parseIndexExpression)
 
 	// Read the next two tokens, so the currToken and peekToken are both set
 	p.nextToken()
@@ -342,6 +345,33 @@ func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
 	exp := &ast.CallExpression{Token: p.currToken, Function: function}
 	// Parse the argument list b/w the parenthesis
 	exp.Arguments = p.parseExpressionList(token.RPAREN)
+	return exp
+}
+
+// Handles parsing of array index access expressions
+// This implements array element access in the language.
+// Examples:
+// - Simple index: myArray[0]
+// - Expression index: array[1 + 2]
+// - Nested index: matrix[i][j]
+// - Function result index: getArray()[5]
+// Key features:
+// - Left operand can be any expression that evaluates to an array
+// - Index can be any expression that evaluates to an integer
+// - Supports nested indexing for multidimensional arrays
+func (p *Parser) parseIndexExpression(left ast.Expression) ast.Expression {
+	exp := &ast.IndexExpression{Token: p.currToken, Left: left}
+	// Move past the opening bracket
+	p.nextToken()
+
+	// Parse the index expression with lowest precendence
+	exp.Index = p.parseExpression(LOWEST)
+
+	// Ensure proper termination with closing bracket
+	if !p.expectPeek(token.RBRACKET) {
+		return nil
+	}
+
 	return exp
 }
 
