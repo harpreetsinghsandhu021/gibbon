@@ -17,6 +17,7 @@ const (
 	PRODUCT
 	PREFIX
 	CALL
+	INDEX
 )
 
 // Maps token types to their operator precedence levels.
@@ -36,6 +37,7 @@ var precendences = map[token.TokenType]int{
 	token.SLASH:    PRODUCT,
 	token.ASTERISK: PRODUCT,
 	token.LPAREN:   CALL,
+	token.LBRACKET: INDEX,
 }
 
 // Implements a recursive descent parser for the language.
@@ -73,6 +75,9 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.LPAREN, p.parsedGroupedExpression)
 	p.registerPrefix(token.IF, p.parseIfExpression)
 	p.registerPrefix(token.FUNCTION, p.parseFunctionLiteral)
+	p.registerPrefix(token.STRING, p.parseStringLiteral)
+	p.registerPrefix(token.LBRACKET, p.parseArrayLiteral)
+	p.registerPrefix(token.LBRACE, p.parseHashLiteral)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
@@ -84,6 +89,7 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.LT, p.parseInfixExpression)
 	p.registerInfix(token.GT, p.parseInfixExpression)
 	p.registerInfix(token.LPAREN, p.parseCallExpression)
+	p.registerInfix(token.LBRACKET, p.parseIndexExpression)
 
 	// Read the next two tokens, so the currToken and peekToken are both set
 	p.nextToken()
@@ -339,7 +345,34 @@ func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
 	// Create new call expression node with current '(' token the function being called
 	exp := &ast.CallExpression{Token: p.currToken, Function: function}
 	// Parse the argument list b/w the parenthesis
-	exp.Arguments = p.parseCallArguments()
+	exp.Arguments = p.parseExpressionList(token.RPAREN)
+	return exp
+}
+
+// Handles parsing of array index access expressions
+// This implements array element access in the language.
+// Examples:
+// - Simple index: myArray[0]
+// - Expression index: array[1 + 2]
+// - Nested index: matrix[i][j]
+// - Function result index: getArray()[5]
+// Key features:
+// - Left operand can be any expression that evaluates to an array
+// - Index can be any expression that evaluates to an integer
+// - Supports nested indexing for multidimensional arrays
+func (p *Parser) parseIndexExpression(left ast.Expression) ast.Expression {
+	exp := &ast.IndexExpression{Token: p.currToken, Left: left}
+	// Move past the opening bracket
+	p.nextToken()
+
+	// Parse the index expression with lowest precendence
+	exp.Index = p.parseExpression(LOWEST)
+
+	// Ensure proper termination with closing bracket
+	if !p.expectPeek(token.RBRACKET) {
+		return nil
+	}
+
 	return exp
 }
 
@@ -477,6 +510,96 @@ func (p *Parser) parseFunctionLiteral() ast.Expression {
 	lit.Body = p.parseBlockStatement()
 
 	return lit
+}
+
+func (p *Parser) parseStringLiteral() ast.Expression {
+	return &ast.StringLiteral{Token: p.currToken, Value: p.currToken.Literal}
+}
+
+// Handles parsing of array literal expression
+// This implements array construction in the language
+// Examples:
+// - Empty array: []
+// - Simple values: [1, 2, 3]
+// - Mixed expressions: [1 + 2, foo(), x * y]
+// - Nested arrays: [[], [1, 2], [3]]
+// Key features:
+// - Elements can be any valid expression
+// - Supports comma-separated list of expressions
+// - Handles nested array literals
+func (p *Parser) parseArrayLiteral() ast.Expression {
+	array := &ast.ArrayLiteral{Token: p.currToken}
+
+	array.Elements = p.parseExpressionList(token.RBRACKET)
+
+	return array
+}
+
+func (p *Parser) parseHashLiteral() ast.Expression {
+	hash := &ast.HashLiteral{Token: p.currToken}
+	hash.Pairs = make(map[ast.Expression]ast.Expression)
+
+	for !p.peekTokenIs(token.RBRACE) {
+		p.nextToken()
+		key := p.parseExpression(LOWEST)
+
+		if !p.expectPeek(token.COLON) {
+			return nil
+		}
+
+		p.nextToken()
+		value := p.parseExpression(LOWEST)
+		hash.Pairs[key] = value
+
+		if !p.peekTokenIs(token.RBRACE) && !p.expectPeek(token.COMMA) {
+			return nil
+		}
+	}
+
+	if !p.expectPeek(token.RBRACE) {
+		return nil
+	}
+
+	return hash
+}
+
+// Handles parsing of comma-seperated expression lists
+// Parameters:
+// - end: The token type that terminates the list (e.g "]" for arrays)
+// Returns:
+// - Slice of parsed expressions
+// - nil if parsing fails (missing terminator)
+// Parsing process:
+// 1. Handle empty list case
+// 2. Parse first expression
+// 3. Parse addtional comma-seperated expressions
+// 4. Validate proper termination
+func (p *Parser) parseExpressionList(end token.TokenType) []ast.Expression {
+	list := []ast.Expression{}
+
+	// Handle empty list case
+	if p.peekTokenIs(end) {
+		p.nextToken()
+		return list
+	}
+
+	// Parse first expression
+	p.nextToken()
+	list = append(list, p.parseExpression(LOWEST))
+
+	// Parse additional expressions after commas
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken() // consume comma
+		p.nextToken() // move to next expression
+		list = append(list, p.parseExpression(LOWEST))
+	}
+
+	// Ensure proper termination
+	if !p.expectPeek(end) {
+		return nil
+	}
+
+	return list
 }
 
 // Handles parsing of function parameter lists

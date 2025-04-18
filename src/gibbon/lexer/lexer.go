@@ -1,6 +1,8 @@
 package lexer
 
-import "gibbon-lang/src/gibbon/token"
+import (
+	"gibbon-lang/src/gibbon/token"
+)
 
 // Lexer represents a lexical analyzer for the Gibbon programming language.
 // It processes the input string character by character to produce tokens.
@@ -56,6 +58,8 @@ func (l *Lexer) NextToken() token.Token {
 		}
 	case ';':
 		tok = newToken(token.SEMICOLON, l.ch)
+	case ':':
+		tok = newToken(token.COLON, l.ch)
 	case '(':
 		tok = newToken(token.LPAREN, l.ch)
 	case ')':
@@ -86,10 +90,18 @@ func (l *Lexer) NextToken() token.Token {
 		tok = newToken(token.LT, l.ch)
 	case '>':
 		tok = newToken(token.GT, l.ch)
+	case '"':
+		tok.Type = token.STRING
+		tok.Literal = l.readString()
+	case '[':
+		tok = newToken(token.LBRACKET, l.ch)
+	case ']':
+		tok = newToken(token.RBRACKET, l.ch)
 	case 0:
 		tok.Literal = ""
 		tok.Type = token.EOF
 	default:
+
 		if isLetter(l.ch) {
 			tok.Literal = l.readIdentifier()
 			tok.Type = token.LookupIdent(tok.Literal)
@@ -122,6 +134,19 @@ func (l *Lexer) readNumber() string {
 	position := l.position
 	for isDigit(l.ch) {
 		l.readChar()
+	}
+
+	return l.input[position:l.position]
+}
+
+func (l *Lexer) readString() string {
+	position := l.position + 1
+
+	for {
+		l.readChar()
+		if l.ch == '"' || l.ch == 0 {
+			break
+		}
 	}
 
 	return l.input[position:l.position]
