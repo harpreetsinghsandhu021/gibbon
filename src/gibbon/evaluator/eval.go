@@ -62,6 +62,8 @@ func Eval(node ast.Node, env *object.Enviroment) object.Object {
 			return val
 		}
 		env.Set(node.Name.Value, val)
+	case *ast.HashLiteral:
+		return evalHashLiteral(node, env)
 	case *ast.Identifier:
 		return evalIdentifier(node, env)
 	case *ast.FunctionLiteral:
@@ -392,6 +394,8 @@ func evalIndexExpression(left, index object.Object) object.Object {
 	switch {
 	case left.Type() == object.ARRAY_OBJ && index.Type() == object.INTEGER_OBJ:
 		return evalArrayIndexExpression(left, index)
+	case left.Type() == object.HASH_OBJ:
+		return evalHashIndexExpression(left, index)
 	default:
 		return newError("index operator not supported: %s", left.Type())
 	}
@@ -422,6 +426,70 @@ func evalArrayIndexExpression(array, index object.Object) object.Object {
 		return NULL
 	}
 	return arrayObject.Elements[idx]
+}
+
+func evalHashIndexExpression(hash, index object.Object) object.Object {
+	hashObject := hash.(*object.Hash)
+	key, ok := index.(object.Hashable)
+	if !ok {
+		return newError("unusable as hash key: %s", index.Type())
+	}
+
+	pair, ok := hashObject.Pairs[key.HashKey()]
+	if !ok {
+		return NULL
+	}
+
+	return pair.Value
+}
+
+// Handles evaluation of hash/dictionary literals
+// Grammar: hash_literal -> '{' (expression ':' expression (',' expression ':' expression)*)? '}'
+// Returns:
+// - Hash object containing evaluated key-value pairs
+// - Error object if any key/value evaluation fails
+// - Error if a key is not hashable
+// Process:
+// 1. Creates empty hash map
+// 2. Evaluates each key-value pair
+// 3. Ensures keys are hashable
+// 4. Computes hash keys
+// 5. Stores pairs in final hash object
+// Examples:
+// - Empty hash: {}
+// - String keys: {"name": "foo", "age": 42}
+// - Integer keys: {1: "one", 2: "two"}
+// - Boolean keys: {true: "yes", false: "no"}
+// - Expression keys: {2 + 3: "five"}
+func evalHashLiteral(node *ast.HashLiteral, env *object.Enviroment) object.Object {
+	pairs := make(map[object.HashKey]object.HashPair)
+
+	// Evaluate each key-value pair
+	for keyNode, valueNode := range node.Pairs {
+		// Evaluate key
+		key := Eval(keyNode, env)
+		if isError(key) {
+			return key
+		}
+
+		// Ensure key is hashable
+		hashKey, ok := key.(object.Hashable)
+		if !ok {
+			return newError("unusable as hash key: %s", key.Type())
+		}
+
+		// Evaluate value
+		value := Eval(valueNode, env)
+		if isError(value) {
+			return value
+		}
+
+		// Store pair in hash map
+		hashed := hashKey.HashKey()
+		pairs[hashed] = object.HashPair{Key: key, Value: value}
+	}
+
+	return &object.Hash{Pairs: pairs}
 }
 
 // Implements function application (calling)
