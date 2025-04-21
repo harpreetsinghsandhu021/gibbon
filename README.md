@@ -1,2 +1,2 @@
 # Gibbon-lang
-![Gibbon](./gibbons.png)
+![Gibbon](./gibbons.webp)
