@@ -44,7 +44,10 @@ type Opcode byte
 // The operation code for loading constants.
 // When executed, it loads a constant from the constant pool onto the stack.
 // The operand (2 bytes) specifies the index of the constant in the pool.
-const OpConstant Opcode = iota // Uses iota for auto-incrementing opcode values
+const (
+	OpConstant Opcode = iota // Uses iota for auto-incrementing opcode values
+	OpAdd
+)
 
 // Provides metadata about an opcode
 // This structure is crucial for debugging and correctly parsing instructions.
@@ -57,6 +60,7 @@ type Definition struct {
 // This allows us to look up information about an opcode at runtime
 var definitions = map[Opcode]*Definition{
 	OpConstant: {"OpConstant", []int{2}}, // OpConstant has one 2-byte operand
+	OpAdd:      {"OpAdd", []int{}},       // A single byte, single opcode that pops the two topmost elements off the stack, adds them and pushes the result back on the stack
 }
 
 // Retrieves the definition for a given opcode.
@@ -240,6 +244,8 @@ func (ins Instructions) fmtInstruction(def *Definition, operands []int) string {
 
 	// Format based on operand count
 	switch operandCount {
+	case 0:
+		return def.Name
 	case 1:
 		// Format single-operand instruction
 		return fmt.Sprintf("%s %d", def.Name, operands[0])
