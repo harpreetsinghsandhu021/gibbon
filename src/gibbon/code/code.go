@@ -48,6 +48,9 @@ const (
 	OpConstant Opcode = iota // Uses iota for auto-incrementing opcode values
 	OpAdd
 	OpPop
+	OpSub
+	OpMul
+	OpDiv
 )
 
 // Provides metadata about an opcode
@@ -63,6 +66,9 @@ var definitions = map[Opcode]*Definition{
 	OpConstant: {"OpConstant", []int{2}}, // OpConstant has one 2-byte operand
 	OpAdd:      {"OpAdd", []int{}},       // A single byte, single opcode that pops the two topmost elements off the stack, adds them and pushes the result back on the stack
 	OpPop:      {"OpPop", []int{}},       // Pop the topmost element off the stack
+	OpSub:      {"OpSub", []int{}},
+	OpMul:      {"OpMul", []int{}},
+	OpDiv:      {"OpDiv", []int{}},
 }
 
 // Retrieves the definition for a given opcode.
