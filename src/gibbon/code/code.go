@@ -1,6 +1,7 @@
 package code
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 )
@@ -149,4 +150,174 @@ func Make(op Opcode, operands ...int) []byte {
 	}
 
 	return instruction
+}
+
+/*
+Implements the Stringer interface for Instructions type.
+It provides a human-readable representation of bytecode instructions.
+
+Detailed Operation:
+------------------
+
+1. Instruction Processing:
+  - Iterates through instructions sequentially
+  - Decodes each instruction and its operands
+  - Formats them into readable text
+
+2. Error Handling:
+  - Reports invalid opcodes
+  - Validates operand counts
+  - Continues processing after errors
+
+3. Output Formatting:
+  - Includes instruction offset
+  - Shows opcode names
+  - Displays decoded operand values
+
+Memory Layout Example:
+---------------------
+Given bytecode: [OpConstant, 0x01, 0x00]
+Output: "0000 OpConstant 256"
+
+	        |____||________| |__|
+			  |       |        |
+			  |       |        +--- Decoded operand value
+			  |       +--- Opcode name
+			  +-- Instruction offset
+*/
+func (ins Instructions) String() string {
+	var out bytes.Buffer
+
+	i := 0
+	for i < len(ins) {
+		// Lookup instruction definition
+		def, err := Lookup(ins[i])
+		if err != nil {
+			fmt.Fprintf(&out, "ERROR: %s\n", err)
+			continue
+		}
+
+		// Read and decode operands
+		operands, read := ReadOperands(def, ins[i+1:])
+
+		// Format instruction with offset and decoded values
+		if i > 0 {
+			fmt.Fprintf(&out, "\t") // Add tab for all lines except the first
+		}
+		fmt.Fprintf(&out, "%04d %s", i, ins.fmtInstruction(def, operands))
+
+		// Add newline if not the last instruction
+		if i+1+read < len(ins) {
+			fmt.Fprintf(&out, "\n")
+		}
+
+		// Move to next instruction
+		i += 1 + read
+	}
+
+	return out.String()
+}
+
+/*
+Formats a single instruction with its operands.
+
+Detailed Operation:
+------------------
+1. Validation:
+  - Checks operand count matches definition
+  - Reports mismatch errors
+
+2. Formatting:
+  - Handles different operand counts
+  - Combines opcode name with operands
+  - Provides error messages for invalid cases
+*/
+func (ins Instructions) fmtInstruction(def *Definition, operands []int) string {
+	operandCount := len(def.OperandWidths)
+	if len(operands) != operandCount {
+		return fmt.Sprintf("ERROR: operand len %d does not match defined %d\n", len(operands), operandCount)
+	}
+
+	// Format based on operand count
+	switch operandCount {
+	case 1:
+		// Format single-operand instruction
+		return fmt.Sprintf("%s %d", def.Name, operands[0])
+	}
+
+	return fmt.Sprintf("ERROR: unhandled operandCount for %s\n", def.Name)
+}
+
+/*
+Decodes operands from a bytecode instruction.
+
+Detailed Operation:
+------------------
+1. Operand Extraction Phase:
+  - Creates a slice to hold decoded operands
+  - Size based on operand width specification
+  - Maintains offset for multi-operand instructions
+
+2. Width-based Decoding:
+  - Handles different operand widths (currently 2-bytes)
+  - Uses big-endian byte order for consistency
+  - Converts bytes back to integers
+
+3. Offset Tracking:
+  - Keeps track of bytes read
+  - Essential for instruction parsing
+  - Enables sequential instruction reading
+
+Parameters:
+  - def *Definition    : Metadata about the instruction's operands
+  - ins Instructions  : Raw bytecode containing the operands
+
+Returns:
+  - []int: Slice of decoded operand values
+  - int:   Number of bytes read (offset)
+
+Memory Layout Example:
+---------------------
+For OpConstant with operand 256
+[0x01][0x00]    -> 256
+
+	^     ^
+	|     |
+	+-----+-- 2 bytes in big-endian format
+*/
+func ReadOperands(def *Definition, ins Instructions) ([]int, int) {
+	// Allocate slice for decoded operands
+	// Size matches the number of expected operands
+	operands := make([]int, len(def.OperandWidths))
+	// Track position in instruction byte sequence
+	offset := 0
+
+	// Process each operand according to its width
+	for i, width := range def.OperandWidths {
+		switch width {
+		case 2:
+			// Handle 2-byte operands:
+			// - Read using big-endian byte order
+			// - Convert to integer value
+			operands[i] = int(ReadUint16(ins[offset:]))
+		}
+
+		// Move offset forward by processes width
+		offset += width
+	}
+
+	return operands, offset
+}
+
+/*
+Converts two bytes into a uint16 value.
+
+Operation:
+---------
+- Takes 2 consecutive bytes from instruction
+- Interprets them as big-endian unint16
+- Essential for reading 2-byte operands
+*/
+func ReadUint16(ins Instructions) uint16 {
+	return binary.BigEndian.Uint16(ins)
 }
