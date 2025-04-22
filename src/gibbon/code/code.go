@@ -58,6 +58,8 @@ const (
 	OpGreaterThan
 	OpMinus
 	OpBang
+	OpJumpNotTruthy
+	OpJump
 )
 
 // Provides metadata about an opcode
@@ -70,19 +72,21 @@ type Definition struct {
 // Maps opcodes to their metadata
 // This allows us to look up information about an opcode at runtime
 var definitions = map[Opcode]*Definition{
-	OpConstant:    {"OpConstant", []int{2}}, // OpConstant has one 2-byte operand
-	OpAdd:         {"OpAdd", []int{}},       // A single byte, single opcode that pops the two topmost elements off the stack, adds them and pushes the result back on the stack
-	OpPop:         {"OpPop", []int{}},       // Pop the topmost element off the stack
-	OpSub:         {"OpSub", []int{}},
-	OpMul:         {"OpMul", []int{}},
-	OpDiv:         {"OpDiv", []int{}},
-	OpTrue:        {"OpTrue", []int{}},
-	OpFalse:       {"OpFalse", []int{}},
-	OpEqual:       {"OpEqual", []int{}},
-	OpNotEqual:    {"OpNotEqual", []int{}},
-	OpGreaterThan: {"OpGreaterThan", []int{}},
-	OpMinus:       {"OpMinus", []int{}},
-	OpBang:        {"OpBang", []int{}},
+	OpConstant:      {"OpConstant", []int{2}}, // OpConstant has one 2-byte operand
+	OpAdd:           {"OpAdd", []int{}},       // A single byte, single opcode that pops the two topmost elements off the stack, adds them and pushes the result back on the stack
+	OpPop:           {"OpPop", []int{}},       // Pop the topmost element off the stack
+	OpSub:           {"OpSub", []int{}},
+	OpMul:           {"OpMul", []int{}},
+	OpDiv:           {"OpDiv", []int{}},
+	OpTrue:          {"OpTrue", []int{}},
+	OpFalse:         {"OpFalse", []int{}},
+	OpEqual:         {"OpEqual", []int{}},
+	OpNotEqual:      {"OpNotEqual", []int{}},
+	OpGreaterThan:   {"OpGreaterThan", []int{}},
+	OpMinus:         {"OpMinus", []int{}},
+	OpBang:          {"OpBang", []int{}},
+	OpJumpNotTruthy: {"OpJumpNotTruthy", []int{2}},
+	OpJump:          {"OpJump", []int{2}},
 }
 
 // Retrieves the definition for a given opcode.
