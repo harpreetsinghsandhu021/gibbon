@@ -40,6 +40,9 @@ import (
 
 const StackSize = 2048
 
+var True = &object.Boolean{Value: true}
+var False = &object.Boolean{Value: false}
+
 /*
 Represents the virtual machine that executes bytecode.
 It maintains the execution state including the instruction sequence, constant pool, and execnution stack.
@@ -119,7 +122,20 @@ func (vm *VM) Run() error {
 
 		case code.OpPop:
 			vm.pop()
+
+		case code.OpTrue:
+			err := vm.push(True)
+			if err != nil {
+				return err
+			}
+
+		case code.OpFalse:
+			err := vm.push(False)
+			if err != nil {
+				return err
+			}
 		}
+
 	}
 
 	return nil
