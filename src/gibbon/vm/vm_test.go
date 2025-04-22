@@ -137,6 +137,8 @@ func TestBooleanExpressions(t *testing.T) {
 		{"(1 < 2) == false", false},
 		{"(1 > 2) == true", false},
 		{"(1 > 2) == false", true},
+		{"!(if (false) { 5; })", true},
+		{"if ((if (false) { 10 })) { 10 } else { 20 }", 20},
 	}
 	runVmTests(t, tests)
 }
