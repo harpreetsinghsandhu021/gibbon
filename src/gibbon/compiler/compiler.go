@@ -158,20 +158,20 @@ func (c *Compiler) Compile(node ast.Node) error {
 			c.removeLastPop()
 		}
 
+		// 5. Step unconditional jump
+		// Skip over else block after executing consequence
+		jumpPos := c.emit(code.OpJump, 9999)
+
+		// 6. Update conditional jump target
+		// Now we know where the else block starts
+		afterConsequencePos := len(c.instructions)
+		c.changeOperand(jumpNotTruthyPos, afterConsequencePos)
+
 		// 5. Handle alternative (else) branch if present
 		if node.Alternative == nil {
-			// No else branch: Update jump target to skip consequence
-			afterConsequencePos := len(c.instructions)
-
-			c.changeOperand(jumpNotTruthyPos, afterConsequencePos)
+			// No else branch: emit NULL for consistent stack behavior
+			c.emit(code.OpNull)
 		} else {
-			// emit jump to skip else block
-			jumpPos := c.emit(code.OpJump, 9999)
-
-			// Patch the conditional jump to target else block
-			afterConsequencePos := len(c.instructions)
-			c.changeOperand(jumpNotTruthyPos, afterConsequencePos)
-
 			err := c.Compile(node.Alternative)
 			if err != nil {
 				return err
@@ -180,11 +180,11 @@ func (c *Compiler) Compile(node ast.Node) error {
 			if c.lastInstructionIsPop() {
 				c.removeLastPop()
 			}
-
-			// Patch unconditional jump to skip else block
-			afterAlternativePos := len(c.instructions)
-			c.changeOperand(jumpPos, afterAlternativePos)
 		}
+		// Update unconditional jump target
+		// Now we know where the if expression ends
+		afterAlternativePos := len(c.instructions)
+		c.changeOperand(jumpPos, afterAlternativePos)
 
 	case *ast.BlockStatement:
 		for _, s := range node.Statements {
