@@ -5,6 +5,7 @@ import (
 	"gibbon-lang/src/gibbon/ast"
 	"gibbon-lang/src/gibbon/code"
 	"gibbon-lang/src/gibbon/object"
+	"sort"
 )
 
 /*
@@ -144,6 +145,40 @@ func (c *Compiler) Compile(node ast.Node) error {
 		}
 
 		c.emit(code.OpArray, len(node.Elements))
+
+	case *ast.HashLiteral:
+		// Extract keys
+		keys := []ast.Expression{}
+		for k := range node.Pairs {
+			keys = append(keys, k)
+		}
+
+		// Sort keys for consistent hash layout
+		sort.Slice(keys, func(i, j int) bool {
+			return keys[i].String() < keys[j].String()
+		})
+
+		// Compile key-value pairs
+		// For each pair, compile both key and value
+		// Stack layout after each pair: [..., key1, val1, key2, val2]
+		for _, k := range keys {
+			// Compile key
+			err := c.Compile(k)
+			if err != nil {
+				return err
+			}
+
+			// Compile corresponding value
+			err = c.Compile(node.Pairs[k])
+			if err != nil {
+				return err
+			}
+		}
+
+		// Emit hash construction instruction
+		// OpHash takes number of key-value pairs * 2 as operand
+		// This tells VM how many stack items to consume
+		c.emit(code.OpHash, len(node.Pairs)*2)
 
 	case *ast.LetStatement:
 		err := c.Compile(node.Value)
