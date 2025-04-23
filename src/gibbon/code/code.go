@@ -63,6 +63,7 @@ const (
 	OpNull
 	OpGetGlobal
 	OpSetGlobal
+	OpArray
 )
 
 // Provides metadata about an opcode
@@ -93,6 +94,7 @@ var definitions = map[Opcode]*Definition{
 	OpNull:          {"OpNull", []int{}},
 	OpGetGlobal:     {"OpGetGlobal", []int{2}},
 	OpSetGlobal:     {"OpSetGlobal", []int{2}},
+	OpArray:         {"OpArray", []int{2}},
 }
 
 // Retrieves the definition for a given opcode.
