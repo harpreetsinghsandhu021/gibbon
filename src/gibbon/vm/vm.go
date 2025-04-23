@@ -39,6 +39,7 @@ import (
 */
 
 const StackSize = 2048
+const GlobalSize = 65536
 
 var True = &object.Boolean{Value: true}
 var False = &object.Boolean{Value: false}
@@ -61,6 +62,7 @@ type VM struct {
 	instructions code.Instructions // Instruction sequence to execute
 	stack        []object.Object   // Fixed-size stack for operations
 	sp           int               // Stack pointer (points to next free slot)
+	globals      []object.Object
 }
 
 // Creates and intializes a new VM instance.
@@ -70,7 +72,14 @@ func New(bytecode *compiler.Bytecode) *VM {
 		constants:    bytecode.Constants,
 		stack:        make([]object.Object, StackSize),
 		sp:           0,
+		globals:      make([]object.Object, GlobalSize),
 	}
+}
+
+func NewWithGlobalsStore(bytecode *compiler.Bytecode, s []object.Object) *VM {
+	vm := New(bytecode)
+	vm.globals = s
+	return vm
 }
 
 /*
@@ -167,6 +176,27 @@ func (vm *VM) Run() error {
 			condition := vm.pop()
 			if !isTruthy(condition) {
 				ip = pos - 1
+			}
+
+		case code.OpSetGlobal:
+			// Read 2-byte global index operand
+			globalIndex := code.ReadUint16(vm.instructions[ip+1:])
+			// Skip past the 2-byte operand
+			ip += 2
+
+			// Pop value from stack and store in globals array at index
+			vm.globals[globalIndex] = vm.pop()
+
+		case code.OpGetGlobal:
+			// Read 2-byte global index operand
+			globalIndex := code.ReadUint16(vm.instructions[ip+1:])
+			// Skip past the 2-byte operand
+			ip += 2
+
+			// Push global value onto stack
+			err := vm.push(vm.globals[globalIndex])
+			if err != nil {
+				return err
 			}
 
 		case code.OpNull:

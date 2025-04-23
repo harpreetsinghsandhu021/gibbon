@@ -68,6 +68,13 @@ func New() *Compiler {
 	}
 }
 
+func NewWithState(s *SymbolTable, constants []object.Object) *Compiler {
+	compiler := New()
+	compiler.symbolTable = s
+	compiler.constants = constants
+	return compiler
+}
+
 /*
 Processes an AST node and generates corresponding bytecode instructions.
 This is the core compilation method that walks through the AST and transforms high-level

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gibbon-lang/src/gibbon/compiler"
 	"gibbon-lang/src/gibbon/lexer"
+	"gibbon-lang/src/gibbon/object"
 	"gibbon-lang/src/gibbon/parser"
 	"gibbon-lang/src/gibbon/vm"
 	"io"
@@ -62,6 +63,10 @@ func Start(in io.Reader, out io.Writer) {
 	scanner := bufio.NewScanner(in)
 	fmt.Println(WELCOME_IMAGE)
 
+	constants := []object.Object{}
+	globals := make([]object.Object, vm.GlobalSize)
+	symbolTable := compiler.NewSymbolTable()
+
 	for {
 		fmt.Printf(PROMPT)
 		scanned := scanner.Scan()
@@ -79,14 +84,16 @@ func Start(in io.Reader, out io.Writer) {
 			continue
 		}
 
-		comp := compiler.New()
+		comp := compiler.NewWithState(symbolTable, constants)
 		err := comp.Compile(program)
 		if err != nil {
 			fmt.Fprintf(out, "Woops! Compilation failed:\n %s\n", err)
 			continue
 		}
 
-		machine := vm.New(comp.Bytecode())
+		code := comp.Bytecode()
+		constants = code.Constants
+		machine := vm.NewWithGlobalsStore(code, globals)
 		err = machine.Run()
 
 		if err != nil {
