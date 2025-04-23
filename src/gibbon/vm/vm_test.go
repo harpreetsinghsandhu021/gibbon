@@ -56,6 +56,27 @@ func testStringObject(expected string, actual object.Object) error {
 	return nil
 }
 
+func testIntegerArray(expected []int, actual object.Object) error {
+
+	array, ok := actual.(*object.Array)
+	if !ok {
+		return fmt.Errorf("object not Array: %T (%+v)", actual, actual)
+	}
+
+	if len(array.Elements) != len(expected) {
+		return fmt.Errorf("wrong num of elements. want=%d, got=%d", len(expected), len(array.Elements))
+	}
+
+	for i, expectedElem := range expected {
+		err := testIntegerObject(int64(expectedElem), array.Elements[i])
+		if err != nil {
+			return fmt.Errorf("testIntegerObject failed: %s", err)
+		}
+	}
+
+	return nil
+}
+
 type vmTestCase struct {
 	input    string
 	expected interface{}
@@ -98,6 +119,11 @@ func testExpectedObject(t *testing.T, expected interface{}, actual object.Object
 		err := testStringObject(expected, actual)
 		if err != nil {
 			t.Errorf("testStringObject failed: %s", err)
+		}
+	case []int:
+		err := testIntegerArray(expected, actual)
+		if err != nil {
+			t.Errorf("testIntegerArray failed: %s", err)
 		}
 	case bool:
 		err := testBooleanObject(bool(expected), actual)
@@ -193,5 +219,14 @@ func TestStringExpressions(t *testing.T) {
 		{`"mon" + "key" + "banana"`, "monkeybanana"},
 	}
 
+	runVmTests(t, tests)
+}
+
+func TestArrayLiterals(t *testing.T) {
+	tests := []vmTestCase{
+		{"[]", []int{}},
+		{"[1, 2, 3]", []int{1, 2, 3}},
+		{"[1 + 2, 3 * 4, 5 + 6]", []int{3, 12, 11}},
+	}
 	runVmTests(t, tests)
 }

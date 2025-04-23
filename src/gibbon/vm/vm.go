@@ -139,6 +139,23 @@ func (vm *VM) Run() error {
 		case code.OpPop:
 			vm.pop()
 
+		case code.OpArray:
+			// Read 2-byte element count
+			numElements := int(code.ReadUint16(vm.instructions[ip+1:]))
+			// Skip past the 2-byte operand
+			ip += 2
+
+			// Build array from top N elements
+			array := vm.buildArray(vm.sp-numElements, vm.sp)
+			// Adjust stack pointer to remove used elements
+			vm.sp = vm.sp - numElements
+
+			// Push the new array onto stack
+			err := vm.push(array)
+			if err != nil {
+				return err
+			}
+
 		case code.OpTrue:
 			err := vm.push(True)
 			if err != nil {
@@ -327,6 +344,23 @@ func (vm *VM) executeMinusOperator() error {
 
 	value := operand.(*object.Integer).Value
 	return vm.push(&object.Integer{Value: -value})
+}
+
+// Creates a new array object from stack elements
+// Parameters:
+// - startIndex: Start of elements to include
+// - endIndex:   End of elements to include
+// Returns: New array object
+func (vm *VM) buildArray(startIndex, endIndex int) object.Object {
+	// Create a slice to hild array elements
+	elements := make([]object.Object, endIndex-startIndex)
+
+	// Copy elements from stack to arrray
+	for i := startIndex; i < endIndex; i++ {
+		elements[i-startIndex] = vm.stack[i]
+	}
+
+	return &object.Array{Elements: elements}
 }
 
 // Adds an object to the top of the stack.
