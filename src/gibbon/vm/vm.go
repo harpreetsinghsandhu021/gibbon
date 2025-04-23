@@ -216,6 +216,23 @@ func (vm *VM) Run() error {
 				return err
 			}
 
+		case code.OpHash:
+			numElements := int(code.ReadUint16(vm.instructions[ip+1:]))
+			ip += 2
+
+			// Build hash from top N elements (N = numElements)
+			hash, err := vm.buildHash(vm.sp-numElements, vm.sp)
+			if err != nil {
+				return err
+			}
+
+			// Remove used elements and push hash
+			vm.sp = vm.sp - numElements
+			err = vm.push(hash)
+			if err != nil {
+				return err
+			}
+
 		case code.OpNull:
 			err := vm.push(Null)
 			if err != nil {
@@ -361,6 +378,37 @@ func (vm *VM) buildArray(startIndex, endIndex int) object.Object {
 	}
 
 	return &object.Array{Elements: elements}
+}
+
+// Creates a new hash object from stack elements
+// Parameters:
+// - startIndex: Start of key-value pairs to include
+// - endIndex:   End of key-value pairs
+// Returns:
+// - New Hash object or error if keys are'nt hashable
+func (vm *VM) buildHash(startIndex, endIndex int) (object.Object, error) {
+	// Initialize hash map to store pairs
+	hashedPairs := make(map[object.HashKey]object.HashPair)
+
+	// Process stack elements as key-value pairs
+	for i := startIndex; i < endIndex; i += 2 {
+		key := vm.stack[i]
+		value := vm.stack[i+1]
+
+		// Create pair structure
+		pair := object.HashPair{Key: key, Value: value}
+
+		// Ensure key is hashable
+		hashKey, ok := key.(object.Hashable)
+		if !ok {
+			return nil, fmt.Errorf("unusable as hash key: %s", key.Type())
+		}
+
+		// Store pair in hash map
+		hashedPairs[hashKey.HashKey()] = pair
+	}
+
+	return &object.Hash{Pairs: hashedPairs}, nil
 }
 
 // Adds an object to the top of the stack.
