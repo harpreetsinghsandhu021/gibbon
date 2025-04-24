@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"gibbon-lang/src/gibbon/ast"
+	"gibbon-lang/src/gibbon/code"
 	"hash/fnv"
 	"strings"
 )
@@ -22,6 +23,7 @@ const STRING_OBJ = "STRING"
 const BUILTIN_OBJ = "BUILTIN"
 const ARRAY_OBJ = "ARRAY"
 const HASH_OBJ = "HASH"
+const COMPILED_FUNCTION_OBJ = "COMPILED_FUNCTION_OBJ"
 
 type Object interface {
 	Type() ObjectType
@@ -178,4 +180,13 @@ func (h *Hash) Inspect() string {
 // Checks if the given object is usable as a hash key
 type Hashable interface {
 	HashKey() HashKey
+}
+
+type CompiledFunction struct {
+	Instructions code.Instructions
+}
+
+func (cf *CompiledFunction) Type() ObjectType { return COMPILED_FUNCTION_OBJ }
+func (cf *CompiledFunction) Inspect() string {
+	return fmt.Sprintf("CompiledFunction[%p]", cf)
 }
