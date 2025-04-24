@@ -66,6 +66,9 @@ const (
 	OpArray
 	OpHash
 	OpIndex
+	OpCall
+	OpReturnValue
+	OpReturn
 )
 
 // Provides metadata about an opcode
@@ -99,6 +102,9 @@ var definitions = map[Opcode]*Definition{
 	OpArray:         {"OpArray", []int{2}},
 	OpHash:          {"OpHash", []int{2}},
 	OpIndex:         {"OpIndex", []int{}},
+	OpCall:          {"OpCall", []int{}},        // Start executing the 'object.CompiledFunction' sitting on top of the stack
+	OpReturnValue:   {"OpReturnValue", []int{}}, // Return the value sitting on top of the stack
+	OpReturn:        {"OpReturn", []int{}},      // Return from the current funcition with no return value
 }
 
 // Retrieves the definition for a given opcode.
