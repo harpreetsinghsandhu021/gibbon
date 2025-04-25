@@ -63,6 +63,8 @@ const (
 	OpNull
 	OpGetGlobal
 	OpSetGlobal
+	OpGetLocal
+	OpSetLocal
 	OpArray
 	OpHash
 	OpIndex
@@ -105,6 +107,8 @@ var definitions = map[Opcode]*Definition{
 	OpCall:          {"OpCall", []int{}},        // Start executing the 'object.CompiledFunction' sitting on top of the stack
 	OpReturnValue:   {"OpReturnValue", []int{}}, // Return the value sitting on top of the stack
 	OpReturn:        {"OpReturn", []int{}},      // Return from the current funcition with no return value
+	OpGetLocal:      {"OpGetLocal", []int{1}},
+	OpSetLocal:      {"OpSetLocal", []int{1}},
 }
 
 // Retrieves the definition for a given opcode.
@@ -192,6 +196,8 @@ func Make(op Opcode, operands ...int) []byte {
 			// For 2-byte operands, encode as big-endian uint16
 			// This allows values from o to 65535
 			binary.BigEndian.PutUint16(instruction[offset:], uint16(o))
+		case 1:
+			instruction[offset] = byte(o)
 		}
 		// Move offset forward by width bytes
 		offset += width
@@ -350,6 +356,8 @@ func ReadOperands(def *Definition, ins Instructions) ([]int, int) {
 			// - Read using big-endian byte order
 			// - Convert to integer value
 			operands[i] = int(ReadUint16(ins[offset:]))
+		case 1:
+			operands[i] = int(ReadUint8(ins[offset:]))
 		}
 
 		// Move offset forward by processes width
@@ -371,3 +379,5 @@ Operation:
 func ReadUint16(ins Instructions) uint16 {
 	return binary.BigEndian.Uint16(ins)
 }
+
+func ReadUint8(ins Instructions) uint8 { return uint8(ins[0]) }
