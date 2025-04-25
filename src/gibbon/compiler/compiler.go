@@ -371,7 +371,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 			c.replaceLastPopWithReturn()
 		}
 
-		if !c.lastInstructionIs(code.OpPop) {
+		if !c.lastInstructionIs(code.OpReturnValue) {
 			c.emit(code.OpReturn)
 		}
 
@@ -388,6 +388,13 @@ func (c *Compiler) Compile(node ast.Node) error {
 
 		c.emit(code.OpReturnValue)
 
+	case *ast.CallExpression:
+		err := c.Compile(node.Function)
+		if err != nil {
+			return err
+		}
+
+		c.emit(code.OpCall)
 	}
 
 	return nil
