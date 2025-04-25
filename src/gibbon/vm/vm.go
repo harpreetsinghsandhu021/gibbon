@@ -295,9 +295,11 @@ func (vm *VM) Run() error {
 
 		case code.OpCall:
 			// Implements function invocation
+			numArgs := code.ReadUint8(ins[ip+1:])
+			vm.currentFrame().ip += 1
 
 			// Get function object from stack top
-			fn, ok := vm.stack[vm.sp-1].(*object.CompiledFunction)
+			fn, ok := vm.stack[vm.sp-1-int(numArgs)].(*object.CompiledFunction)
 			if !ok {
 				return fmt.Errorf("calling non-function")
 			}
