@@ -184,6 +184,7 @@ type Hashable interface {
 
 type CompiledFunction struct {
 	Instructions code.Instructions
+	NumLocals    int // The number of local bindings this function is going to create
 }
 
 func (cf *CompiledFunction) Type() ObjectType { return COMPILED_FUNCTION_OBJ }

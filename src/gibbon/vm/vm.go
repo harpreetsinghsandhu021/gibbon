@@ -72,7 +72,7 @@ type VM struct {
 func New(bytecode *compiler.Bytecode) *VM {
 
 	mainFn := &object.CompiledFunction{Instructions: bytecode.Instructions}
-	mainFrame := NewFrame(mainFn)
+	mainFrame := NewFrame(mainFn, 0)
 
 	frames := make([]*Frame, MaxFrames)
 	frames[0] = mainFrame
@@ -237,6 +237,30 @@ func (vm *VM) Run() error {
 				return err
 			}
 
+		case code.OpSetLocal:
+			// Read 1-byte local index operand
+			localIndex := code.ReadUint8(ins[ip+1:])
+			// Skip past the 1-byte operand
+			vm.currentFrame().ip += 1
+
+			// Get the current frame
+			frame := vm.currentFrame()
+
+			// Compute the location of the local binding and then save the popped value off the stack
+			// - Add the 'basePointer' to the index of the binding in question to get the computed location
+			vm.stack[frame.basePointer+int(localIndex)] = vm.pop()
+
+		case code.OpGetLocal:
+			localIndex := code.ReadUint8(ins[ip+1:])
+			vm.currentFrame().ip += 1
+
+			frame := vm.currentFrame()
+
+			err := vm.push(vm.stack[frame.basePointer+int(localIndex)])
+			if err != nil {
+				return err
+			}
+
 		case code.OpHash:
 			numElements := int(code.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip += 2
@@ -279,9 +303,15 @@ func (vm *VM) Run() error {
 			}
 
 			// Create new call frame for function execution
-			frame := NewFrame(fn)
+			frame := NewFrame(fn, vm.sp)
 			// Push frame to frame stack
 			vm.pushFrame(frame)
+
+			// Reserve 'fn.NumLocals' slots on the stack. These slots might contain
+			// no or old vales and in either case, we don't care. We can now use this
+			// region of the stack for local bindings and the normal usage of the stack(push/pop)
+			// of temp values wont affect it.
+			vm.sp = frame.basePointer + fn.NumLocals
 
 		case code.OpReturnValue:
 			// Implements function return with value
@@ -290,10 +320,9 @@ func (vm *VM) Run() error {
 			returnValue := vm.pop()
 
 			// Remove current frame
-			vm.popFrame()
-
-			// Remove function
-			vm.pop()
+			frame := vm.popFrame()
+			// Removes the local bindings
+			vm.sp = frame.basePointer - 1
 
 			// Push return value on caller's stack
 			err := vm.push(returnValue)
@@ -303,9 +332,9 @@ func (vm *VM) Run() error {
 
 		case code.OpReturn:
 			// Remove current frame
-			vm.popFrame()
-			// Remove function
-			vm.pop()
+			frame := vm.popFrame()
+			// Removes the local bindings
+			vm.sp = frame.basePointer - 1
 
 			err := vm.push(Null)
 			if err != nil {
