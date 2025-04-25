@@ -61,7 +61,7 @@ const WELCOME_IMAGE = `
 // of the lexer and finally print all the tokens the lexer gives us until we encounter EOF.
 func Start(in io.Reader, out io.Writer) {
 	scanner := bufio.NewScanner(in)
-	fmt.Println(WELCOME_IMAGE)
+	fmt.Print(WELCOME_IMAGE)
 
 	constants := []object.Object{}
 	globals := make([]object.Object, vm.GlobalSize)
