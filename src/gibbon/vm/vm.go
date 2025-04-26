@@ -298,22 +298,10 @@ func (vm *VM) Run() error {
 			numArgs := code.ReadUint8(ins[ip+1:])
 			vm.currentFrame().ip += 1
 
-			// Get function object from stack top
-			fn, ok := vm.stack[vm.sp-1-int(numArgs)].(*object.CompiledFunction)
-			if !ok {
-				return fmt.Errorf("calling non-function")
+			err := vm.callFunction(int(numArgs))
+			if err != nil {
+				return err
 			}
-
-			// Create new call frame for function execution
-			frame := NewFrame(fn, vm.sp)
-			// Push frame to frame stack
-			vm.pushFrame(frame)
-
-			// Reserve 'fn.NumLocals' slots on the stack. These slots might contain
-			// no or old vales and in either case, we don't care. We can now use this
-			// region of the stack for local bindings and the normal usage of the stack(push/pop)
-			// of temp values wont affect it.
-			vm.sp = frame.basePointer + fn.NumLocals
 
 		case code.OpReturnValue:
 			// Implements function return with value
@@ -570,6 +558,33 @@ func (vm *VM) StackTop() object.Object {
 	}
 
 	return vm.stack[vm.sp-1]
+}
+
+// Sets up and executes a function call
+// Parameters:
+// - numArgs: Number of arguments being passed to function
+// Returns: Error if function call setup fails
+func (vm *VM) callFunction(numArgs int) error {
+	// Get function object from stack
+	// It's located before the arguments: [fn arg1 arg2]
+	fn, ok := vm.stack[vm.sp-1-numArgs].(*object.CompiledFunction)
+	if !ok {
+		return fmt.Errorf("calling non-function")
+	}
+
+	if numArgs != fn.NumParameters {
+		return fmt.Errorf("wrong number of arguments: want=%d, got=%d", fn.NumParameters, numArgs)
+	}
+
+	// Create new frame for function execution
+	// basePointer points to first argument in the block
+	frame := NewFrame(fn, vm.sp-numArgs)
+	vm.pushFrame(frame)
+
+	// Adjust stack pointer to accomodate local variables
+	vm.sp = frame.basePointer + fn.NumLocals
+
+	return nil
 }
 
 func (vm *VM) pop() object.Object {
