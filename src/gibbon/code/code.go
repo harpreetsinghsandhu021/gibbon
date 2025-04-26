@@ -71,6 +71,7 @@ const (
 	OpCall
 	OpReturnValue
 	OpReturn
+	OpGetBuiltin
 )
 
 // Provides metadata about an opcode
@@ -109,6 +110,7 @@ var definitions = map[Opcode]*Definition{
 	OpReturn:        {"OpReturn", []int{}},      // Return from the current funcition with no return value
 	OpGetLocal:      {"OpGetLocal", []int{1}},
 	OpSetLocal:      {"OpSetLocal", []int{1}},
+	OpGetBuiltin:    {"OpGetBuiltin", []int{1}},
 }
 
 // Retrieves the definition for a given opcode.
