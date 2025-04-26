@@ -298,7 +298,7 @@ func (vm *VM) Run() error {
 			numArgs := code.ReadUint8(ins[ip+1:])
 			vm.currentFrame().ip += 1
 
-			err := vm.callFunction(int(numArgs))
+			err := vm.executeCall(int(numArgs))
 			if err != nil {
 				return err
 			}
@@ -327,6 +327,17 @@ func (vm *VM) Run() error {
 			vm.sp = frame.basePointer - 1
 
 			err := vm.push(Null)
+			if err != nil {
+				return err
+			}
+
+		case code.OpGetBuiltin:
+			builtinIndex := code.ReadUint8(ins[ip+1:])
+			vm.currentFrame().ip += 1
+
+			definition := object.Builtins[builtinIndex]
+
+			err := vm.push(definition.Builtin)
 			if err != nil {
 				return err
 			}
@@ -560,18 +571,24 @@ func (vm *VM) StackTop() object.Object {
 	return vm.stack[vm.sp-1]
 }
 
+func (vm *VM) executeCall(numArgs int) error {
+	callee := vm.stack[vm.sp-1-numArgs]
+
+	switch callee := callee.(type) {
+	case *object.CompiledFunction:
+		return vm.callFunction(callee, numArgs)
+	case *object.Builtin:
+		return vm.callBuiltin(callee, numArgs)
+	default:
+		return fmt.Errorf("calling non-function and non-built-in")
+	}
+}
+
 // Sets up and executes a function call
 // Parameters:
 // - numArgs: Number of arguments being passed to function
 // Returns: Error if function call setup fails
-func (vm *VM) callFunction(numArgs int) error {
-	// Get function object from stack
-	// It's located before the arguments: [fn arg1 arg2]
-	fn, ok := vm.stack[vm.sp-1-numArgs].(*object.CompiledFunction)
-	if !ok {
-		return fmt.Errorf("calling non-function")
-	}
-
+func (vm *VM) callFunction(fn *object.CompiledFunction, numArgs int) error {
 	if numArgs != fn.NumParameters {
 		return fmt.Errorf("wrong number of arguments: want=%d, got=%d", fn.NumParameters, numArgs)
 	}
@@ -583,6 +600,27 @@ func (vm *VM) callFunction(numArgs int) error {
 
 	// Adjust stack pointer to accomodate local variables
 	vm.sp = frame.basePointer + fn.NumLocals
+
+	return nil
+}
+
+// Responsible for executing built-in functions in the VM. It handles the mechanics
+// of calling predefined functions that are part of the language's standard library.
+func (vm *VM) callBuiltin(builtin *object.Builtin, numArgs int) error {
+	// Extract arguments for the builting function.
+	args := vm.stack[vm.sp-numArgs : vm.sp]
+
+	// Call the builtin function by passing all arguments
+	result := builtin.Fn(args...)
+	// Adjust the stack pointer to remove the arguments and function from stack.
+	// Subtract numArgs to remove the arguments and an additional 1 to remove the function.
+	vm.sp = vm.sp - numArgs - 1
+
+	if result != nil {
+		vm.push(result)
+	} else {
+		vm.push(Null)
+	}
 
 	return nil
 }
