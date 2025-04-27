@@ -344,10 +344,25 @@ func (vm *VM) Run() error {
 
 		case code.OpClosure:
 			constIndex := code.ReadUint16(ins[ip+1:])
-			_ = code.ReadUint8(ins[ip+3:])
+			numFree := code.ReadUint8(ins[ip+3:])
 			vm.currentFrame().ip += 3
 
-			err := vm.pushClosure(int(constIndex))
+			err := vm.pushClosure(int(constIndex), int(numFree))
+			if err != nil {
+				return err
+			}
+
+		case code.OpGetFree:
+			// Reads the index of the free variable from the instruction
+			// This index corresponds to the position in the closure's free variables array
+			freeIndex := code.ReadUint8(ins[ip+1:])
+			vm.currentFrame().ip += 1
+
+			// Get the current closure being executed from the current frame
+			currentClosure := vm.currentFrame().cl
+
+			// Push the free variable onto the stack
+			err := vm.push(currentClosure.Free[freeIndex])
 			if err != nil {
 				return err
 			}
@@ -614,15 +629,34 @@ func (vm *VM) callClosure(cl *object.Closure, numArgs int) error {
 	return nil
 }
 
-func (vm *VM) pushClosure(constIndex int) error {
+// Creates a new closure object and pushes it onto the stack
+// This method is crucial for implementing closures/functions that can access variables from their
+// enclosing scopes.
+// Parameters:
+// - constIndex: Index into the constants pool where the compiledFunction is stored
+// - numFree: Number of free variables the closure needs to capture
+func (vm *VM) pushClosure(constIndex, numFree int) error {
+	// Get the function from constants pool
 	constant := vm.constants[constIndex]
+	// Ensure it's actually a function
 	function, ok := constant.(*object.CompiledFunction)
 
 	if !ok {
 		return fmt.Errorf("not a function: %+v", constant)
 	}
 
-	closure := &object.Closure{Fn: function}
+	// Create slice to hold free variables
+	free := make([]object.Object, numFree)
+
+	// Copy free variables from stack
+	for i := 0; i < numFree; i++ {
+		free[i] = vm.stack[vm.sp-numFree+i]
+	}
+	// Adjust stack pointer to remove captured variables
+	vm.sp = vm.sp - numFree
+
+	// Create and push new closure object
+	closure := &object.Closure{Fn: function, Free: free}
 
 	return vm.push(closure)
 }
