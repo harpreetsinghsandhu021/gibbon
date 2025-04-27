@@ -10,6 +10,7 @@ const (
 	GlobalScope  SymbolScope = "GLOBAL"
 	LocalScope   SymbolScope = "LOCAL"
 	BuiltinScope SymbolScope = "BUILTIN"
+	FreeScope    SymbolScope = "FREE"
 )
 
 // Represents a variable or identifier in the source code
@@ -24,11 +25,13 @@ type SymbolTable struct {
 	Outer          *SymbolTable
 	store          map[string]Symbol // Maps names to their Symbol definitions
 	numDefinitions int               // Counter for assigning unique indices
+	FreeSymbols    []Symbol
 }
 
 func NewSymbolTable() *SymbolTable {
 	s := make(map[string]Symbol)
-	return &SymbolTable{store: s}
+	free := []Symbol{}
+	return &SymbolTable{store: s, FreeSymbols: free}
 }
 
 func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
@@ -62,21 +65,45 @@ func (s *SymbolTable) DefineBuiltin(index int, name string) Symbol {
 	return symbol
 }
 
-// Looks up a symbol by name
-// Parameters:
-// - name: The identifier to look up
-// Returns:
-// - Symbol: The found symbol
-// - bool: true if found, false if not defined
-// Used by compiler to:
-// - Generate correct bytecode for variables
-// - Check for undefined variables
+// Creates a new free variable symbol based on an original symbol from an outer scope.
+// This is used for handling closures, where inner functions need to access variables from
+// enclosing scopes.
+func (s *SymbolTable) defineFree(original Symbol) Symbol {
+	// Add the original symbol to the list of free symbols
+	s.FreeSymbols = append(s.FreeSymbols, original)
+
+	// Create new symbol for the free variable
+	// Index corresponds to position in freeSymbols
+	symbol := Symbol{Name: original.Name, Index: len(s.FreeSymbols) - 1}
+	symbol.Scope = FreeScope
+
+	s.store[original.Name] = symbol
+
+	return symbol
+}
+
+// Looks up for a symbol in the current and outer symbol tables.
+// This implements lexical scoping by searching in the current scope first, then checking
+// the outer scopes if the symbol is'nt found.
 func (s *SymbolTable) Resolve(name string) (Symbol, bool) {
+	// Try to find symbol in current scope's store
 	obj, ok := s.store[name]
 
+	// If not found in current scope and we have an outer scope
 	if !ok && s.Outer != nil {
+		// Recursively check outer scope
 		obj, ok := s.Outer.Resolve(name)
-		return obj, ok
+		if !ok {
+			return obj, ok
+		}
+
+		if obj.Scope == GlobalScope || obj.Scope == BuiltinScope {
+			return obj, ok
+		}
+
+		// If found, registers it as free variable
+		free := s.defineFree(obj)
+		return free, true
 	}
 
 	return obj, ok

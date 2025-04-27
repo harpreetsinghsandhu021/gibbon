@@ -24,6 +24,7 @@ const BUILTIN_OBJ = "BUILTIN"
 const ARRAY_OBJ = "ARRAY"
 const HASH_OBJ = "HASH"
 const COMPILED_FUNCTION_OBJ = "COMPILED_FUNCTION_OBJ"
+const CLOSURE_OBJ = "CLOSURE"
 
 type Object interface {
 	Type() ObjectType
@@ -191,4 +192,16 @@ type CompiledFunction struct {
 func (cf *CompiledFunction) Type() ObjectType { return COMPILED_FUNCTION_OBJ }
 func (cf *CompiledFunction) Inspect() string {
 	return fmt.Sprintf("CompiledFunction[%p]", cf)
+}
+
+// Represents a closure in the Gibbon implementation. A closure is a function that captures
+// and has access to variables in its outer (enclosing) scope, even after the outer function has returned.
+type Closure struct {
+	Fn   *CompiledFunction // The compiled function being enclosed
+	Free []Object          // The capture variables from outer scope
+}
+
+func (c *Closure) Type() ObjectType { return CLOSURE_OBJ }
+func (c *Closure) Inspect() string {
+	return fmt.Sprintf("Closure[%p]", c)
 }

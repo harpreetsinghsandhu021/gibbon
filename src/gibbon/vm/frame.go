@@ -11,15 +11,15 @@ import (
 // - Supporting nested function calls
 // - Tracking return positions
 type Frame struct {
-	fn          *object.CompiledFunction //  Reference to compiled function
-	ip          int                      // Instruction pointer for this frame
-	basePointer int                      // Points to the bottom of the stack of the current call frame
+	cl          *object.Closure //  Reference to compiled function
+	ip          int             // Instruction pointer for this frame
+	basePointer int             // Points to the bottom of the stack of the current call frame
 }
 
-func NewFrame(fn *object.CompiledFunction, basePointer int) *Frame {
-	return &Frame{fn: fn, ip: -1, basePointer: basePointer}
+func NewFrame(cl *object.Closure, basePointer int) *Frame {
+	return &Frame{cl: cl, ip: -1, basePointer: basePointer}
 }
 
 func (f *Frame) Instructions() code.Instructions {
-	return f.fn.Instructions
+	return f.cl.Fn.Instructions
 }

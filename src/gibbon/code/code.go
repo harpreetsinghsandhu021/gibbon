@@ -72,6 +72,8 @@ const (
 	OpReturnValue
 	OpReturn
 	OpGetBuiltin
+	OpClosure
+	OpGetFree
 )
 
 // Provides metadata about an opcode
@@ -111,6 +113,12 @@ var definitions = map[Opcode]*Definition{
 	OpGetLocal:      {"OpGetLocal", []int{1}},
 	OpSetLocal:      {"OpSetLocal", []int{1}},
 	OpGetBuiltin:    {"OpGetBuiltin", []int{1}},
+	OpGetFree:       {"OpGetFree", []int{1}},
+
+	OpClosure: {"OpClosure", []int{2, 1}}, // - The first operand, two bytes wide, is the constant index. It specifies where in the constant pool we can find the `*object.compiledFunction`
+	// that's to be converted into a closure.
+	// - The second operand, one byte wide, specifies how many free variables sit on the stack and need to be transferred to the about-to-be created closure.
+
 }
 
 // Retrieves the definition for a given opcode.
@@ -301,6 +309,8 @@ func (ins Instructions) fmtInstruction(def *Definition, operands []int) string {
 	case 1:
 		// Format single-operand instruction
 		return fmt.Sprintf("%s %d", def.Name, operands[0])
+	case 2:
+		return fmt.Sprintf("%s %d %d", def.Name, operands[0], operands[1])
 	}
 
 	return fmt.Sprintf("ERROR: unhandled operandCount for %s\n", def.Name)
