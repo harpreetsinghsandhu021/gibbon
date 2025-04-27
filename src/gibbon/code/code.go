@@ -73,6 +73,7 @@ const (
 	OpReturn
 	OpGetBuiltin
 	OpClosure
+	OpGetFree
 )
 
 // Provides metadata about an opcode
@@ -112,6 +113,7 @@ var definitions = map[Opcode]*Definition{
 	OpGetLocal:      {"OpGetLocal", []int{1}},
 	OpSetLocal:      {"OpSetLocal", []int{1}},
 	OpGetBuiltin:    {"OpGetBuiltin", []int{1}},
+	OpGetFree:       {"OpGetFree", []int{1}},
 
 	OpClosure: {"OpClosure", []int{2, 1}}, // - The first operand, two bytes wide, is the constant index. It specifies where in the constant pool we can find the `*object.compiledFunction`
 	// that's to be converted into a closure.
