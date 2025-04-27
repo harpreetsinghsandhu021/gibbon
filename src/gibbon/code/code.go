@@ -74,6 +74,7 @@ const (
 	OpGetBuiltin
 	OpClosure
 	OpGetFree
+	OpCurrentClosure
 )
 
 // Provides metadata about an opcode
@@ -86,39 +87,38 @@ type Definition struct {
 // Maps opcodes to their metadata
 // This allows us to look up information about an opcode at runtime
 var definitions = map[Opcode]*Definition{
-	OpConstant:      {"OpConstant", []int{2}}, // OpConstant has one 2-byte operand
-	OpAdd:           {"OpAdd", []int{}},       // A single byte, single opcode that pops the two topmost elements off the stack, adds them and pushes the result back on the stack
-	OpPop:           {"OpPop", []int{}},       // Pop the topmost element off the stack
-	OpSub:           {"OpSub", []int{}},
-	OpMul:           {"OpMul", []int{}},
-	OpDiv:           {"OpDiv", []int{}},
-	OpTrue:          {"OpTrue", []int{}},
-	OpFalse:         {"OpFalse", []int{}},
-	OpEqual:         {"OpEqual", []int{}},
-	OpNotEqual:      {"OpNotEqual", []int{}},
-	OpGreaterThan:   {"OpGreaterThan", []int{}},
-	OpMinus:         {"OpMinus", []int{}},
-	OpBang:          {"OpBang", []int{}},
-	OpJumpNotTruthy: {"OpJumpNotTruthy", []int{2}},
-	OpJump:          {"OpJump", []int{2}},
-	OpNull:          {"OpNull", []int{}},
-	OpGetGlobal:     {"OpGetGlobal", []int{2}},
-	OpSetGlobal:     {"OpSetGlobal", []int{2}},
-	OpArray:         {"OpArray", []int{2}},
-	OpHash:          {"OpHash", []int{2}},
-	OpIndex:         {"OpIndex", []int{}},
-	OpCall:          {"OpCall", []int{1}},       // Start executing the 'object.CompiledFunction' sitting on top of the stack
-	OpReturnValue:   {"OpReturnValue", []int{}}, // Return the value sitting on top of the stack
-	OpReturn:        {"OpReturn", []int{}},      // Return from the current funcition with no return value
-	OpGetLocal:      {"OpGetLocal", []int{1}},
-	OpSetLocal:      {"OpSetLocal", []int{1}},
-	OpGetBuiltin:    {"OpGetBuiltin", []int{1}},
-	OpGetFree:       {"OpGetFree", []int{1}},
-
-	OpClosure: {"OpClosure", []int{2, 1}}, // - The first operand, two bytes wide, is the constant index. It specifies where in the constant pool we can find the `*object.compiledFunction`
+	OpConstant:       {"OpConstant", []int{2}}, // OpConstant has one 2-byte operand
+	OpAdd:            {"OpAdd", []int{}},       // A single byte, single opcode that pops the two topmost elements off the stack, adds them and pushes the result back on the stack
+	OpPop:            {"OpPop", []int{}},       // Pop the topmost element off the stack
+	OpSub:            {"OpSub", []int{}},
+	OpMul:            {"OpMul", []int{}},
+	OpDiv:            {"OpDiv", []int{}},
+	OpTrue:           {"OpTrue", []int{}},
+	OpFalse:          {"OpFalse", []int{}},
+	OpEqual:          {"OpEqual", []int{}},
+	OpNotEqual:       {"OpNotEqual", []int{}},
+	OpGreaterThan:    {"OpGreaterThan", []int{}},
+	OpMinus:          {"OpMinus", []int{}},
+	OpBang:           {"OpBang", []int{}},
+	OpJumpNotTruthy:  {"OpJumpNotTruthy", []int{2}},
+	OpJump:           {"OpJump", []int{2}},
+	OpNull:           {"OpNull", []int{}},
+	OpGetGlobal:      {"OpGetGlobal", []int{2}},
+	OpSetGlobal:      {"OpSetGlobal", []int{2}},
+	OpArray:          {"OpArray", []int{2}},
+	OpHash:           {"OpHash", []int{2}},
+	OpIndex:          {"OpIndex", []int{}},
+	OpCall:           {"OpCall", []int{1}},       // Start executing the 'object.CompiledFunction' sitting on top of the stack
+	OpReturnValue:    {"OpReturnValue", []int{}}, // Return the value sitting on top of the stack
+	OpReturn:         {"OpReturn", []int{}},      // Return from the current funcition with no return value
+	OpGetLocal:       {"OpGetLocal", []int{1}},
+	OpSetLocal:       {"OpSetLocal", []int{1}},
+	OpGetBuiltin:     {"OpGetBuiltin", []int{1}},
+	OpGetFree:        {"OpGetFree", []int{1}},
+	OpCurrentClosure: {"OpCurrentClosure", []int{}},
+	OpClosure:        {"OpClosure", []int{2, 1}}, // - The first operand, two bytes wide, is the constant index. It specifies where in the constant pool we can find the `*object.compiledFunction`
 	// that's to be converted into a closure.
 	// - The second operand, one byte wide, specifies how many free variables sit on the stack and need to be transferred to the about-to-be created closure.
-
 }
 
 // Retrieves the definition for a given opcode.

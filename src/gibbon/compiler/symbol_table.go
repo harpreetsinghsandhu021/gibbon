@@ -7,10 +7,11 @@ type SymbolScope string
 
 // Available scope levels
 const (
-	GlobalScope  SymbolScope = "GLOBAL"
-	LocalScope   SymbolScope = "LOCAL"
-	BuiltinScope SymbolScope = "BUILTIN"
-	FreeScope    SymbolScope = "FREE"
+	GlobalScope   SymbolScope = "GLOBAL"
+	LocalScope    SymbolScope = "LOCAL"
+	BuiltinScope  SymbolScope = "BUILTIN"
+	FreeScope     SymbolScope = "FREE"
+	FunctionScope SymbolScope = "FUNCTIOn"
 )
 
 // Represents a variable or identifier in the source code
@@ -79,6 +80,13 @@ func (s *SymbolTable) defineFree(original Symbol) Symbol {
 
 	s.store[original.Name] = symbol
 
+	return symbol
+}
+
+// Creates a new symbol for a function definition in the current scope.
+func (s *SymbolTable) DefineFunctionName(name string) Symbol {
+	symbol := Symbol{Name: name, Index: 0, Scope: FunctionScope}
+	s.store[name] = symbol
 	return symbol
 }
 
